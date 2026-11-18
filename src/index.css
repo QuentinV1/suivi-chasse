@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-earth-50 text-forest-950 font-sans;
+  }
+
+  h1, h2, h3 {
+    @apply font-serif tracking-tight;
+  }
+}
+
+/* Custom scrollbar for a refined editorial feel */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f3ede1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c5d9ca;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9bbfa6;
+}
