@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
 import {
   Compass,
   Award,
@@ -8,17 +9,25 @@ import {
   Trees,
   BarChart3,
   Map as MapIcon,
+  LogOut,
+  UploadCloud,
+  X,
 } from 'lucide-react';
 import { ActiveTab, GeoPoint, Hunt, Trophy } from './types';
+import { auth, isFirebaseConfigured } from './lib/firebase';
 import {
+  clearLegacyLocalData,
   deleteHunt,
   deleteTrophy,
-  getAllHunts,
-  getAllTrophies,
+  getLegacyLocalData,
+  mergeData,
   replaceAllData,
   saveHunt,
   saveTrophy,
+  subscribeToHunts,
+  subscribeToTrophies,
 } from './utils/db';
+import { AuthScreen } from './components/AuthScreen';
 import { HuntsView } from './components/HuntsView';
 import { HuntFormModal } from './components/HuntFormModal';
 import { HuntDetailModal } from './components/HuntDetailModal';
@@ -30,10 +39,21 @@ import { StatsView } from './components/StatsView';
 import { MapView } from './components/MapView';
 
 export const App: React.FC = () => {
+  const [user, setUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(!isFirebaseConfigured);
+
   const [activeTab, setActiveTab] = useState<ActiveTab>('hunts');
   const [hunts, setHunts] = useState<Hunt[]>([]);
   const [trophies, setTrophies] = useState<Trophy[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  // Legacy local data migration banner
+  const [legacyData, setLegacyData] = useState<{
+    hunts: Hunt[];
+    trophies: Trophy[];
+  } | null>(null);
+  const [isMigratingLegacy, setIsMigratingLegacy] = useState(false);
 
   // Hunt modals
   const [isHuntFormOpen, setIsHuntFormOpen] = useState(false);
@@ -52,44 +72,124 @@ export const App: React.FC = () => {
   // Backup modal
   const [isBackupOpen, setIsBackupOpen] = useState(false);
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const [loadedHunts, loadedTrophies] = await Promise.all([
-        getAllHunts(),
-        getAllTrophies(),
-      ]);
-      setHunts(loadedHunts);
-      setTrophies(loadedTrophies);
-    } finally {
+  useEffect(() => {
+    if (!isFirebaseConfigured || !auth) {
+      setAuthReady(true);
       setIsLoading(false);
+      return;
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthReady(true);
+      if (!currentUser) {
+        setHunts([]);
+        setTrophies([]);
+        setSelectedHunt(null);
+        setSelectedTrophy(null);
+        setLegacyData(null);
+        setSyncError(null);
+        setIsLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    setIsLoading(true);
+    setSyncError(null);
+
+    let huntsLoaded = false;
+    let trophiesLoaded = false;
+    const markLoaded = () => {
+      if (huntsLoaded && trophiesLoaded) {
+        setIsLoading(false);
+      }
+    };
+
+    const unsubHunts = subscribeToHunts(
+      user.uid,
+      (loadedHunts) => {
+        setHunts(loadedHunts);
+        huntsLoaded = true;
+        markLoaded();
+      },
+      (err) => {
+        console.error('Erreur Firestore (sorties):', err);
+        setSyncError('Impossible de synchroniser vos sorties avec Firestore.');
+        huntsLoaded = true;
+        markLoaded();
+      }
+    );
+
+    const unsubTrophies = subscribeToTrophies(
+      user.uid,
+      (loadedTrophies) => {
+        setTrophies(loadedTrophies);
+        trophiesLoaded = true;
+        markLoaded();
+      },
+      (err) => {
+        console.error('Erreur Firestore (trophées):', err);
+        setSyncError('Impossible de synchroniser vos trophées avec Firestore.');
+        trophiesLoaded = true;
+        markLoaded();
+      }
+    );
+
+    void getLegacyLocalData().then((local) => {
+      if (local.hunts.length > 0 || local.trophies.length > 0) {
+        setLegacyData(local);
+      }
+    });
+
+    return () => {
+      unsubHunts();
+      unsubTrophies();
+    };
+  }, [user]);
+
+  const handleMigrateLegacyData = async () => {
+    if (!user || !legacyData) return;
+    setIsMigratingLegacy(true);
+    try {
+      await mergeData(user.uid, legacyData.hunts, legacyData.trophies);
+      await clearLegacyLocalData();
+      setLegacyData(null);
+    } catch (err) {
+      console.error('Erreur migration locale:', err);
+      setSyncError('Échec de l’importation des données locales.');
+    } finally {
+      setIsMigratingLegacy(false);
     }
   };
 
-  useEffect(() => {
-    void loadData();
-  }, []);
+  const handleSignOut = async () => {
+    if (!auth) return;
+    await signOut(auth);
+  };
 
   const handleSaveHunt = async (hunt: Hunt) => {
-    await saveHunt(hunt);
-    const updated = await getAllHunts();
-    setHunts(updated);
+    if (!user) return;
+    await saveHunt(user.uid, hunt);
   };
 
   const handleDeleteHunt = async (id: string) => {
-    await deleteHunt(id);
-    setHunts((prev) => prev.filter((h) => h.id !== id));
+    if (!user) return;
+    await deleteHunt(user.uid, id);
   };
 
   const handleSaveTrophy = async (trophy: Trophy) => {
-    await saveTrophy(trophy);
-    const updated = await getAllTrophies();
-    setTrophies(updated);
+    if (!user) return;
+    await saveTrophy(user.uid, trophy);
   };
 
   const handleDeleteTrophy = async (id: string) => {
-    await deleteTrophy(id);
-    setTrophies((prev) => prev.filter((t) => t.id !== id));
+    if (!user) return;
+    await deleteTrophy(user.uid, id);
   };
 
   const handleImport = async (
@@ -97,21 +197,12 @@ export const App: React.FC = () => {
     importedTrophies: Trophy[],
     mode: 'replace' | 'merge'
   ) => {
+    if (!user) return;
     if (mode === 'replace') {
-      await replaceAllData(importedHunts, importedTrophies);
+      await replaceAllData(user.uid, importedHunts, importedTrophies);
     } else {
-      const huntMap = new Map<string, Hunt>(hunts.map((h) => [h.id, h]));
-      importedHunts.forEach((h) => huntMap.set(h.id, h));
-
-      const trophyMap = new Map<string, Trophy>(trophies.map((t) => [t.id, t]));
-      importedTrophies.forEach((t) => trophyMap.set(t.id, t));
-
-      await replaceAllData(
-        Array.from(huntMap.values()),
-        Array.from(trophyMap.values())
-      );
+      await mergeData(user.uid, importedHunts, importedTrophies);
     }
-    await loadData();
   };
 
   const openNewModal = () => {
@@ -129,6 +220,21 @@ export const App: React.FC = () => {
     setMapFocusPoint(coords);
     setActiveTab('map');
   };
+
+  if (!authReady) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-earth-50 text-earth-700">
+        <Loader2 className="h-8 w-8 animate-spin text-forest-700" />
+        <p className="mt-3 text-sm font-medium">Vérification de la session...</p>
+      </div>
+    );
+  }
+
+  if (!isFirebaseConfigured || !user) {
+    return <AuthScreen />;
+  }
+
+  const userLabel = user.displayName || user.email || 'Chasseur';
 
   return (
     <div className="min-h-screen bg-earth-50 text-forest-950">
@@ -152,7 +258,14 @@ export const App: React.FC = () => {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className="hidden max-w-[180px] truncate rounded-xl border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-forest-100 md:inline-block"
+                title={user.email ?? userLabel}
+              >
+                {userLabel}
+              </span>
+
               <button
                 type="button"
                 onClick={() => setIsBackupOpen(true)}
@@ -170,6 +283,16 @@ export const App: React.FC = () => {
               >
                 <Plus className="h-4 w-4" />
                 {activeTab === 'trophies' ? 'Nouveau trophée' : 'Nouvelle sortie'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-2.5 py-2 text-xs font-semibold text-earth-100 transition hover:bg-red-500/25 sm:px-3 sm:text-sm"
+                title="Se déconnecter"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="hidden lg:inline">Déconnexion</span>
               </button>
             </div>
           </div>
@@ -251,6 +374,53 @@ export const App: React.FC = () => {
 
       {/* Main Content */}
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+        {syncError && (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800 sm:text-sm">
+            <span>{syncError}</span>
+            <button
+              type="button"
+              onClick={() => setSyncError(null)}
+              className="rounded-lg p-1 text-red-600 hover:bg-red-100"
+              aria-label="Fermer"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
+        {legacyData && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-forest-300 bg-forest-50 px-4 py-3 text-xs text-forest-900 sm:text-sm">
+            <div className="flex items-center gap-2.5">
+              <UploadCloud className="h-5 w-5 shrink-0 text-forest-700" />
+              <span>
+                Des données locales ont été trouvées sur cet appareil (
+                <strong>{legacyData.hunts.length}</strong> sortie(s),{' '}
+                <strong>{legacyData.trophies.length}</strong> trophée(s)). Voulez-vous les
+                importer dans votre compte ?
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={isMigratingLegacy}
+                onClick={handleMigrateLegacyData}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-forest-800 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-forest-900 disabled:opacity-60"
+              >
+                {isMigratingLegacy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Importer
+              </button>
+              <button
+                type="button"
+                disabled={isMigratingLegacy}
+                onClick={() => setLegacyData(null)}
+                className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-earth-700 hover:bg-forest-100"
+              >
+                Ignorer
+              </button>
+            </div>
+          </div>
+        )}
+
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 text-earth-700">
             <Loader2 className="h-8 w-8 animate-spin text-forest-700" />

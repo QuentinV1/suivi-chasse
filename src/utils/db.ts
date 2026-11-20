@@ -1,47 +1,231 @@
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  onSnapshot,
+  setDoc,
+  writeBatch,
+  type Unsubscribe,
+} from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { Hunt, Trophy } from '../types';
 
-const DB_NAME = 'suivi-chasse-db';
-const DB_VERSION = 1;
-const HUNTS_STORE = 'hunts';
-const TROPHIES_STORE = 'trophies';
+const HUNTS_COLLECTION = 'hunts';
+const TROPHIES_COLLECTION = 'trophies';
 
-const FALLBACK_HUNTS_KEY = 'suivi_chasse_hunts_fallback_v1';
-const FALLBACK_TROPHIES_KEY = 'suivi_chasse_trophies_fallback_v1';
+// Legacy local storage constants (used to offer one-click migration of pre-auth data)
+const LEGACY_DB_NAME = 'suivi-chasse-db';
+const LEGACY_DB_VERSION = 1;
+const LEGACY_FALLBACK_HUNTS_KEY = 'suivi_chasse_hunts_fallback_v1';
+const LEGACY_FALLBACK_TROPHIES_KEY = 'suivi_chasse_trophies_fallback_v1';
 
-function openDatabase(): Promise<IDBDatabase> {
+function requireDb() {
+  if (!db) {
+    throw new Error('Firestore n’est pas configuré.');
+  }
+  return db;
+}
+
+/**
+ * Recursively removes keys with `undefined` values because Firestore rejects `undefined`.
+ */
+function stripUndefined<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => stripUndefined(item)) as unknown as T;
+  }
+  if (value !== null && typeof value === 'object') {
+    const cleaned: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (v !== undefined) {
+        cleaned[k] = stripUndefined(v);
+      }
+    }
+    return cleaned as T;
+  }
+  return value;
+}
+
+function sortByDateDesc<T extends { date: string; createdAt: string }>(items: T[]): T[] {
+  return items.sort(
+    (a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)
+  );
+}
+
+function userHuntsCollection(userId: string) {
+  return collection(requireDb(), 'users', userId, HUNTS_COLLECTION);
+}
+
+function userTrophiesCollection(userId: string) {
+  return collection(requireDb(), 'users', userId, TROPHIES_COLLECTION);
+}
+
+export function subscribeToHunts(
+  userId: string,
+  onData: (hunts: Hunt[]) => void,
+  onError?: (error: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    userHuntsCollection(userId),
+    (snapshot) => {
+      const hunts = snapshot.docs.map((d) => d.data() as Hunt);
+      onData(sortByDateDesc(hunts));
+    },
+    (err) => {
+      onError?.(err);
+    }
+  );
+}
+
+export function subscribeToTrophies(
+  userId: string,
+  onData: (trophies: Trophy[]) => void,
+  onError?: (error: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    userTrophiesCollection(userId),
+    (snapshot) => {
+      const trophies = snapshot.docs.map((d) => d.data() as Trophy);
+      onData(sortByDateDesc(trophies));
+    },
+    (err) => {
+      onError?.(err);
+    }
+  );
+}
+
+export async function getAllHunts(userId: string): Promise<Hunt[]> {
+  const snapshot = await getDocs(userHuntsCollection(userId));
+  const hunts = snapshot.docs.map((d) => d.data() as Hunt);
+  return sortByDateDesc(hunts);
+}
+
+export async function saveHunt(userId: string, hunt: Hunt): Promise<void> {
+  const ref = doc(requireDb(), 'users', userId, HUNTS_COLLECTION, hunt.id);
+  await setDoc(ref, stripUndefined(hunt));
+}
+
+export async function deleteHunt(userId: string, id: string): Promise<void> {
+  const ref = doc(requireDb(), 'users', userId, HUNTS_COLLECTION, id);
+  await deleteDoc(ref);
+}
+
+export async function getAllTrophies(userId: string): Promise<Trophy[]> {
+  const snapshot = await getDocs(userTrophiesCollection(userId));
+  const trophies = snapshot.docs.map((d) => d.data() as Trophy);
+  return sortByDateDesc(trophies);
+}
+
+export async function saveTrophy(userId: string, trophy: Trophy): Promise<void> {
+  const ref = doc(requireDb(), 'users', userId, TROPHIES_COLLECTION, trophy.id);
+  await setDoc(ref, stripUndefined(trophy));
+}
+
+export async function deleteTrophy(userId: string, id: string): Promise<void> {
+  const ref = doc(requireDb(), 'users', userId, TROPHIES_COLLECTION, id);
+  await deleteDoc(ref);
+}
+
+async function commitBatchedOps(
+  ops: Array<(batch: ReturnType<typeof writeBatch>) => void>
+): Promise<void> {
+  const firestore = requireDb();
+  const CHUNK_SIZE = 450; // Stay safely under Firestore's 500 operations per batch limit
+  for (let i = 0; i < ops.length; i += CHUNK_SIZE) {
+    const batch = writeBatch(firestore);
+    const chunk = ops.slice(i, i + CHUNK_SIZE);
+    for (const apply of chunk) {
+      apply(batch);
+    }
+    await batch.commit();
+  }
+}
+
+export async function replaceAllData(
+  userId: string,
+  hunts: Hunt[],
+  trophies: Trophy[]
+): Promise<void> {
+  const firestore = requireDb();
+  const [existingHuntsSnap, existingTrophiesSnap] = await Promise.all([
+    getDocs(userHuntsCollection(userId)),
+    getDocs(userTrophiesCollection(userId)),
+  ]);
+
+  const ops: Array<(batch: ReturnType<typeof writeBatch>) => void> = [];
+
+  for (const d of existingHuntsSnap.docs) {
+    ops.push((batch) => batch.delete(d.ref));
+  }
+  for (const d of existingTrophiesSnap.docs) {
+    ops.push((batch) => batch.delete(d.ref));
+  }
+  for (const hunt of hunts) {
+    const ref = doc(firestore, 'users', userId, HUNTS_COLLECTION, hunt.id);
+    ops.push((batch) => batch.set(ref, stripUndefined(hunt)));
+  }
+  for (const trophy of trophies) {
+    const ref = doc(firestore, 'users', userId, TROPHIES_COLLECTION, trophy.id);
+    ops.push((batch) => batch.set(ref, stripUndefined(trophy)));
+  }
+
+  await commitBatchedOps(ops);
+}
+
+export async function mergeData(
+  userId: string,
+  hunts: Hunt[],
+  trophies: Trophy[]
+): Promise<void> {
+  const firestore = requireDb();
+  const ops: Array<(batch: ReturnType<typeof writeBatch>) => void> = [];
+
+  for (const hunt of hunts) {
+    const ref = doc(firestore, 'users', userId, HUNTS_COLLECTION, hunt.id);
+    ops.push((batch) => batch.set(ref, stripUndefined(hunt), { merge: true }));
+  }
+  for (const trophy of trophies) {
+    const ref = doc(firestore, 'users', userId, TROPHIES_COLLECTION, trophy.id);
+    ops.push((batch) => batch.set(ref, stripUndefined(trophy), { merge: true }));
+  }
+
+  await commitBatchedOps(ops);
+}
+
+// --- Legacy local IndexedDB / localStorage helpers for pre-auth data migration ---
+
+function openLegacyDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (typeof indexedDB === 'undefined') {
       reject(new Error('IndexedDB indisponible'));
       return;
     }
-
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
+    const request = indexedDB.open(LEGACY_DB_NAME, LEGACY_DB_VERSION);
     request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(HUNTS_STORE)) {
-        db.createObjectStore(HUNTS_STORE, { keyPath: 'id' });
+      const idb = request.result;
+      if (!idb.objectStoreNames.contains(HUNTS_COLLECTION)) {
+        idb.createObjectStore(HUNTS_COLLECTION, { keyPath: 'id' });
       }
-      if (!db.objectStoreNames.contains(TROPHIES_STORE)) {
-        db.createObjectStore(TROPHIES_STORE, { keyPath: 'id' });
+      if (!idb.objectStoreNames.contains(TROPHIES_COLLECTION)) {
+        idb.createObjectStore(TROPHIES_COLLECTION, { keyPath: 'id' });
       }
     };
-
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error('Erreur ouverture IndexedDB'));
+    request.onerror = () => reject(request.error);
   });
 }
 
-async function getAllFromStore<T>(storeName: string, fallbackKey: string): Promise<T[]> {
+async function readLegacyStore<T>(storeName: string, fallbackKey: string): Promise<T[]> {
   try {
-    const db = await openDatabase();
-    return await new Promise<T[]>((resolve, reject) => {
-      const tx = db.transaction(storeName, 'readonly');
-      const store = tx.objectStore(storeName);
-      const req = store.getAll();
+    const idb = await openLegacyDatabase();
+    const items = await new Promise<T[]>((resolve, reject) => {
+      const tx = idb.transaction(storeName, 'readonly');
+      const req = tx.objectStore(storeName).getAll();
       req.onsuccess = () => resolve((req.result as T[]) ?? []);
       req.onerror = () => reject(req.error);
     });
+    idb.close();
+    return items;
   } catch {
     try {
       const raw = localStorage.getItem(fallbackKey);
@@ -52,102 +236,35 @@ async function getAllFromStore<T>(storeName: string, fallbackKey: string): Promi
   }
 }
 
-async function putInStore<T extends { id: string }>(
-  storeName: string,
-  fallbackKey: string,
-  item: T
-): Promise<void> {
+export async function getLegacyLocalData(): Promise<{
+  hunts: Hunt[];
+  trophies: Trophy[];
+}> {
+  const [hunts, trophies] = await Promise.all([
+    readLegacyStore<Hunt>(HUNTS_COLLECTION, LEGACY_FALLBACK_HUNTS_KEY),
+    readLegacyStore<Trophy>(TROPHIES_COLLECTION, LEGACY_FALLBACK_TROPHIES_KEY),
+  ]);
+  return { hunts, trophies };
+}
+
+export async function clearLegacyLocalData(): Promise<void> {
   try {
-    const db = await openDatabase();
+    const idb = await openLegacyDatabase();
     await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(storeName, 'readwrite');
-      tx.objectStore(storeName).put(item);
+      const tx = idb.transaction([HUNTS_COLLECTION, TROPHIES_COLLECTION], 'readwrite');
+      tx.objectStore(HUNTS_COLLECTION).clear();
+      tx.objectStore(TROPHIES_COLLECTION).clear();
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
+    idb.close();
   } catch {
-    const existing = await getAllFromStore<T>(storeName, fallbackKey);
-    const idx = existing.findIndex((entry) => entry.id === item.id);
-    if (idx >= 0) {
-      existing[idx] = item;
-    } else {
-      existing.push(item);
-    }
-    localStorage.setItem(fallbackKey, JSON.stringify(existing));
+    // Ignore IndexedDB errors
   }
-}
-
-async function deleteFromStore<T extends { id: string }>(
-  storeName: string,
-  fallbackKey: string,
-  id: string
-): Promise<void> {
   try {
-    const db = await openDatabase();
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(storeName, 'readwrite');
-      tx.objectStore(storeName).delete(id);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
+    localStorage.removeItem(LEGACY_FALLBACK_HUNTS_KEY);
+    localStorage.removeItem(LEGACY_FALLBACK_TROPHIES_KEY);
   } catch {
-    const existing = await getAllFromStore<T>(storeName, fallbackKey);
-    const filtered = existing.filter((entry) => entry.id !== id);
-    localStorage.setItem(fallbackKey, JSON.stringify(filtered));
-  }
-}
-
-export async function getAllHunts(): Promise<Hunt[]> {
-  const hunts = await getAllFromStore<Hunt>(HUNTS_STORE, FALLBACK_HUNTS_KEY);
-  return hunts.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
-}
-
-export async function saveHunt(hunt: Hunt): Promise<void> {
-  await putInStore(HUNTS_STORE, FALLBACK_HUNTS_KEY, hunt);
-}
-
-export async function deleteHunt(id: string): Promise<void> {
-  await deleteFromStore<Hunt>(HUNTS_STORE, FALLBACK_HUNTS_KEY, id);
-}
-
-export async function getAllTrophies(): Promise<Trophy[]> {
-  const trophies = await getAllFromStore<Trophy>(TROPHIES_STORE, FALLBACK_TROPHIES_KEY);
-  return trophies.sort(
-    (a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)
-  );
-}
-
-export async function saveTrophy(trophy: Trophy): Promise<void> {
-  await putInStore(TROPHIES_STORE, FALLBACK_TROPHIES_KEY, trophy);
-}
-
-export async function deleteTrophy(id: string): Promise<void> {
-  await deleteFromStore<Trophy>(TROPHIES_STORE, FALLBACK_TROPHIES_KEY, id);
-}
-
-export async function replaceAllData(hunts: Hunt[], trophies: Trophy[]): Promise<void> {
-  try {
-    const db = await openDatabase();
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction([HUNTS_STORE, TROPHIES_STORE], 'readwrite');
-      const huntStore = tx.objectStore(HUNTS_STORE);
-      const trophyStore = tx.objectStore(TROPHIES_STORE);
-
-      huntStore.clear();
-      trophyStore.clear();
-
-      for (const hunt of hunts) {
-        huntStore.put(hunt);
-      }
-      for (const trophy of trophies) {
-        trophyStore.put(trophy);
-      }
-
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch {
-    localStorage.setItem(FALLBACK_HUNTS_KEY, JSON.stringify(hunts));
-    localStorage.setItem(FALLBACK_TROPHIES_KEY, JSON.stringify(trophies));
+    // Ignore localStorage errors
   }
 }

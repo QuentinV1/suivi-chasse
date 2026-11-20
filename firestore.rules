@@ -1,0 +1,221 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// This security rules file assumes the following per-user subcollection structures:
+//
+// 1. Collection: users/{userId}/hunts/{huntId}
+//    Document ID: huntId (string, must match data.id)
+//    Required Fields:
+//      - id: string (1..128 chars, immutable, must equal huntId)
+//      - date: string (YYYY-MM-DD, exactly 10 chars)
+//      - location: string (0..200 chars)
+//      - huntType: string (enum: 'Battue', 'Approche', 'Affût', 'Petit gibier',
+//          "Chasse au chien d'arrêt", 'Bécasse', "Gibier d'eau", 'Autre')
+//      - participants: list of strings (max 50 items)
+//      - seenGame: list of maps { species: string, count: number } (max 50 items)
+//      - harvestedGame: list of maps { species: string, count: number } (max 50 items)
+//      - notes: string (0..5000 chars)
+//      - photos: list of compressed image data URLs (max 10 items)
+//      - createdAt: string (ISO 8601 timestamp, immutable)
+//      - updatedAt: string (ISO 8601 timestamp)
+//    Optional Fields:
+//      - coordinates: map { lat: number, lng: number, accuracy?: number, label?: string }
+//      - posts: list of maps { id: string, name: string, lat: number, lng: number, notes?: string } (max 50 items)
+//
+// 2. Collection: users/{userId}/trophies/{trophyId}
+//    Document ID: trophyId (string, must match data.id)
+//    Required Fields:
+//      - id: string (1..128 chars, immutable, must equal trophyId)
+//      - title: string (1..200 chars)
+//      - species: string (1..100 chars)
+//      - date: string (YYYY-MM-DD, exactly 10 chars)
+//      - location: string (0..200 chars)
+//      - description: string (0..5000 chars)
+//      - createdAt: string (ISO 8601 timestamp, immutable)
+//      - updatedAt: string (ISO 8601 timestamp)
+//    Optional Fields:
+//      - weightKg: number (0..2000)
+//      - photo: string (compressed image data URL, max 700000 chars)
+//      - coordinates: map { lat: number, lng: number, accuracy?: number, label?: string }
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny: block all reads and writes unless explicitly permitted below
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function hasRequiredFields(data, fields) {
+      return data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(data, fields) {
+      return data.keys().hasOnly(fields);
+    }
+
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isValidDateOnly(dateStr) {
+      return dateStr is string &&
+             dateStr.size() == 10 &&
+             dateStr.matches('^\\d{4}-\\d{2}-\\d{2}$');
+    }
+
+    function isValidIsoTimestamp(ts) {
+      return ts is string &&
+             ts.size() >= 19 &&
+             ts.size() <= 35 &&
+             ts.matches('^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$');
+    }
+
+    function isValidDataImageUrl(url) {
+      return url is string &&
+             url.size() > 0 &&
+             url.size() <= 700000 &&
+             url.matches('^data:image/(webp|jpeg|jpg|png);base64,.*');
+    }
+
+    function isValidGeoPoint(geo) {
+      return geo is map &&
+             hasRequiredFields(geo, ['lat', 'lng']) &&
+             hasOnlyAllowedFields(geo, ['lat', 'lng', 'accuracy', 'label']) &&
+             geo.lat is number && geo.lat >= -90 && geo.lat <= 90 &&
+             geo.lng is number && geo.lng >= -180 && geo.lng <= 180 &&
+             (!('accuracy' in geo) || (geo.accuracy is number && geo.accuracy >= 0 && geo.accuracy <= 100000)) &&
+             (!('label' in geo) || isValidString(geo.label, 0, 200));
+    }
+
+    function isValidHuntType(huntType) {
+      return huntType in [
+        'Battue',
+        'Approche',
+        'Affût',
+        'Petit gibier',
+        "Chasse au chien d'arrêt",
+        'Bécasse',
+        "Gibier d'eau",
+        'Autre'
+      ];
+    }
+
+    function isValidPhotoList(photos) {
+      return photos is list &&
+             photos.size() <= 10 &&
+             (photos.size() < 1 || isValidDataImageUrl(photos[0])) &&
+             (photos.size() < 2 || isValidDataImageUrl(photos[1])) &&
+             (photos.size() < 3 || isValidDataImageUrl(photos[2])) &&
+             (photos.size() < 4 || isValidDataImageUrl(photos[3])) &&
+             (photos.size() < 5 || isValidDataImageUrl(photos[4])) &&
+             (photos.size() < 6 || isValidDataImageUrl(photos[5])) &&
+             (photos.size() < 7 || isValidDataImageUrl(photos[6])) &&
+             (photos.size() < 8 || isValidDataImageUrl(photos[7])) &&
+             (photos.size() < 9 || isValidDataImageUrl(photos[8])) &&
+             (photos.size() < 10 || isValidDataImageUrl(photos[9]));
+    }
+
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators (Called on BOTH create and update)
+    // ===============================================================
+
+    function isValidHunt(data, huntId) {
+      return hasRequiredFields(data, [
+               'id', 'date', 'location', 'huntType', 'participants',
+               'seenGame', 'harvestedGame', 'notes', 'photos',
+               'createdAt', 'updatedAt'
+             ]) &&
+             hasOnlyAllowedFields(data, [
+               'id', 'date', 'location', 'huntType', 'participants',
+               'seenGame', 'harvestedGame', 'notes', 'photos',
+               'coordinates', 'posts', 'createdAt', 'updatedAt'
+             ]) &&
+             isValidString(data.id, 1, 128) &&
+             data.id == huntId &&
+             isValidDateOnly(data.date) &&
+             isValidString(data.location, 0, 200) &&
+             isValidHuntType(data.huntType) &&
+             data.participants is list && data.participants.size() <= 50 &&
+             data.seenGame is list && data.seenGame.size() <= 50 &&
+             data.harvestedGame is list && data.harvestedGame.size() <= 50 &&
+             isValidString(data.notes, 0, 5000) &&
+             isValidPhotoList(data.photos) &&
+             (!('coordinates' in data) || isValidGeoPoint(data.coordinates)) &&
+             (!('posts' in data) || (data.posts is list && data.posts.size() <= 50)) &&
+             isValidIsoTimestamp(data.createdAt) &&
+             isValidIsoTimestamp(data.updatedAt);
+    }
+
+    function isValidTrophy(data, trophyId) {
+      return hasRequiredFields(data, [
+               'id', 'title', 'species', 'date', 'location',
+               'description', 'createdAt', 'updatedAt'
+             ]) &&
+             hasOnlyAllowedFields(data, [
+               'id', 'title', 'species', 'date', 'weightKg',
+               'location', 'description', 'photo', 'coordinates',
+               'createdAt', 'updatedAt'
+             ]) &&
+             isValidString(data.id, 1, 128) &&
+             data.id == trophyId &&
+             isValidString(data.title, 1, 200) &&
+             isValidString(data.species, 1, 100) &&
+             isValidDateOnly(data.date) &&
+             (!('weightKg' in data) || (data.weightKg is number && data.weightKg >= 0 && data.weightKg <= 2000)) &&
+             isValidString(data.location, 0, 200) &&
+             isValidString(data.description, 0, 5000) &&
+             (!('photo' in data) || isValidDataImageUrl(data.photo)) &&
+             (!('coordinates' in data) || isValidGeoPoint(data.coordinates)) &&
+             isValidIsoTimestamp(data.createdAt) &&
+             isValidIsoTimestamp(data.updatedAt);
+    }
+
+    // ===============================================================
+    // User Subcollections
+    // ===============================================================
+
+    match /users/{userId} {
+      // User-owned hunting sorties
+      match /hunts/{huntId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidHunt(request.resource.data, huntId);
+        allow update: if isOwner(userId) &&
+                         isValidHunt(request.resource.data, huntId) &&
+                         areImmutableFieldsUnchanged(['id', 'createdAt']);
+        allow delete: if isOwner(userId);
+      }
+
+      // User-owned trophies
+      match /trophies/{trophyId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidTrophy(request.resource.data, trophyId);
+        allow update: if isOwner(userId) &&
+                         isValidTrophy(request.resource.data, trophyId) &&
+                         areImmutableFieldsUnchanged(['id', 'createdAt']);
+        allow delete: if isOwner(userId);
+      }
+    }
+  }
+}
