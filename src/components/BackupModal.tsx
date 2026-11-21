@@ -7,6 +7,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   Loader2,
+  LayoutGrid,
+  ExternalLink,
 } from 'lucide-react';
 import { BackupPayload, Hunt, Trophy } from '../types';
 import { formatBytes } from '../utils/image';
@@ -50,14 +52,21 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [showOtherApps, setShowOtherApps] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        if (showOtherApps) {
+          setShowOtherApps(false);
+        } else {
+          onClose();
+        }
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [onClose, showOtherApps]);
 
   const estimatedStorage = useMemo(() => {
     const json = JSON.stringify({ hunts, trophies });
@@ -278,8 +287,94 @@ export const BackupModal: React.FC<BackupModalProps> = ({
               </div>
             )}
           </div>
+
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-earth-200 bg-earth-50/60 p-4">
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-forest-950">Mes autres applications</h3>
+              <p className="text-xs text-forest-600">
+                Accéder rapidement aux autres applications web (GitHub Pages).
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowOtherApps(true)}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-forest-700 px-3 py-2 text-xs font-semibold text-white transition hover:bg-forest-800"
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              Ouvrir
+            </button>
+          </div>
         </div>
       </div>
+
+      {showOtherApps && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs"
+          onClick={() => setShowOtherApps(false)}
+        >
+          <div
+            className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-earth-200 px-5 py-4">
+              <h3 className="flex items-center gap-2 text-base font-bold text-forest-950">
+                <LayoutGrid className="h-4 w-4 text-forest-700" />
+                Mes autres applications
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowOtherApps(false)}
+                aria-label="Fermer"
+                className="rounded-lg p-1.5 text-forest-500 hover:bg-earth-100 hover:text-forest-800"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex-1 space-y-2.5 overflow-y-auto p-5">
+              <p className="text-xs text-forest-600">
+                Retrouvez toutes les autres applications hébergées sur GitHub Pages.
+              </p>
+              <div className="grid gap-2">
+                {[
+                  { name: "L'Affinoir", desc: "Charcuterie, salaisons & cave d'affinage", url: 'https://quentinv1.github.io/app-charcuterie/' },
+                  { name: 'Pêche France', desc: 'Réglementation, mailles, cartes & carnet de prises', url: 'https://quentinv1.github.io/app-peche/' },
+                  { name: 'App Voyage', desc: "Planificateur d'itinéraire, carte & carnet de voyage", url: 'https://quentinv1.github.io/app-voyage/' },
+                  { name: 'Budget Prévisionnel', desc: 'Budget du foyer, provisions & projections', url: 'https://quentinv1.github.io/budget-previsionnel/' },
+                  { name: 'Cave à vin', desc: 'Stock de bouteilles, apogée & dégustations', url: 'https://quentinv1.github.io/cave-a-vin/' },
+                  { name: 'Checklist Valise', desc: 'Bagages, calculateur de poids & règles IATA', url: 'https://quentinv1.github.io/checklist-valise/' },
+                  { name: 'Livre de recettes', desc: 'Recettes, planning semaine & liste de courses', url: 'https://quentinv1.github.io/livre-recettes/' },
+                  { name: 'Travaux Maison', desc: 'Plan 2D/3D, courses, tâches & entretien', url: 'https://quentinv1.github.io/travaux-maison/' },
+                ].map((app) => (
+                  <a
+                    key={app.url}
+                    href={app.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-earth-200 bg-earth-50/50 px-3.5 py-2.5 transition hover:border-forest-300 hover:bg-forest-50/50"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-forest-950">{app.name}</div>
+                      <div className="truncate text-xs text-forest-600">{app.desc}</div>
+                    </div>
+                    <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-forest-700">
+                      Ouvrir <ExternalLink className="h-3.5 w-3.5" />
+                    </span>
+                  </a>
+                ))}
+              </div>
+            </div>
+            <div className="flex justify-end border-t border-earth-200 px-5 py-3">
+              <button
+                type="button"
+                onClick={() => setShowOtherApps(false)}
+                className="rounded-lg border border-earth-300 bg-white px-4 py-2 text-xs font-semibold text-forest-800 hover:bg-earth-50"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
