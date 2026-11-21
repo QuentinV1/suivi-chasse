@@ -84,12 +84,12 @@ export const ShareTrophyModal: React.FC<ShareTrophyModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-forest-950/75 p-3 backdrop-blur-sm sm:p-6">
-      <div className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-earth-200 bg-white shadow-2xl">
+      <div className="flex max-h-[90vh] max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-earth-200 bg-white shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-earth-200 bg-forest-900 px-5 py-4 text-white">
-          <div className="flex items-center gap-2.5">
-            <Share2 className="h-5 w-5 text-earth-300" />
-            <div>
+        <div className="flex items-center justify-between gap-3 border-b border-earth-200 bg-forest-900 px-4 py-3.5 text-white sm:px-5 sm:py-4">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <Share2 className="h-5 w-5 shrink-0 text-earth-300" />
+            <div className="min-w-0">
               <h2 className="text-lg font-semibold">Partager le trophée</h2>
               <p className="text-xs text-forest-200">
                 Photo &amp; description vers WhatsApp, Messenger ou SMS
@@ -99,7 +99,7 @@ export const ShareTrophyModal: React.FC<ShareTrophyModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-forest-200 transition hover:bg-white/10 hover:text-white"
+            className="shrink-0 rounded-lg p-1.5 text-forest-200 transition hover:bg-white/10 hover:text-white"
             aria-label="Fermer"
           >
             <X className="h-5 w-5" />
@@ -107,7 +107,7 @@ export const ShareTrophyModal: React.FC<ShareTrophyModalProps> = ({
         </div>
 
         {/* Body */}
-        <div className="flex-1 space-y-4 overflow-y-auto p-5">
+        <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
           {trophy.photo && (
             <div className="flex items-center gap-3 rounded-xl border border-earth-200 bg-earth-50/70 p-2.5">
               <img
@@ -136,7 +136,7 @@ export const ShareTrophyModal: React.FC<ShareTrophyModalProps> = ({
           )}
 
           <div>
-            <div className="mb-1.5 flex items-center justify-between">
+            <div className="mb-1.5 flex flex-wrap items-center justify-between gap-1">
               <label className="text-xs font-semibold uppercase tracking-wide text-earth-700">
                 Message descriptif
               </label>

@@ -61,10 +61,10 @@ export const HuntDetailModal: React.FC<HuntDetailModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-forest-950/65 p-3 backdrop-blur-sm sm:p-6">
-      <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-earth-200 bg-white shadow-2xl">
+      <div className="flex max-h-[90vh] max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-earth-200 bg-white shadow-2xl">
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 border-b border-earth-200 bg-forest-900 px-5 py-4 text-white">
-          <div>
+        <div className="flex items-start justify-between gap-3 border-b border-earth-200 bg-forest-900 px-4 py-3.5 text-white sm:gap-4 sm:px-5 sm:py-4">
+          <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-copper-500 px-2.5 py-0.5 text-xs font-semibold text-white">
                 {hunt.huntType}
@@ -73,7 +73,7 @@ export const HuntDetailModal: React.FC<HuntDetailModalProps> = ({
                 Saison {getHuntingSeason(hunt.date)}
               </span>
             </div>
-            <h2 className="mt-1.5 text-xl font-semibold">{hunt.location}</h2>
+            <h2 className="mt-1.5 break-words text-xl font-semibold">{hunt.location}</h2>
             <p className="mt-0.5 flex items-center gap-1.5 text-xs text-forest-200">
               <Calendar className="h-3.5 w-3.5" />
               {formatDateFr(hunt.date)}
@@ -82,7 +82,7 @@ export const HuntDetailModal: React.FC<HuntDetailModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-forest-200 transition hover:bg-white/10 hover:text-white"
+            className="shrink-0 rounded-lg p-1.5 text-forest-200 transition hover:bg-white/10 hover:text-white"
             aria-label="Fermer"
           >
             <X className="h-5 w-5" />
@@ -90,7 +90,7 @@ export const HuntDetailModal: React.FC<HuntDetailModalProps> = ({
         </div>
 
         {/* Body */}
-        <div className="flex-1 space-y-5 overflow-y-auto p-5">
+        <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-5">
           {/* Participants */}
           {hunt.participants.length > 0 && (
             <div>
@@ -248,7 +248,7 @@ export const HuntDetailModal: React.FC<HuntDetailModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between border-t border-earth-200 bg-earth-50/60 px-5 py-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-earth-200 bg-earth-50/60 px-4 py-3 sm:px-5 sm:py-3.5">
           <button
             type="button"
             onClick={handleDelete}
@@ -258,7 +258,7 @@ export const HuntDetailModal: React.FC<HuntDetailModalProps> = ({
             Supprimer
           </button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={onClose}
@@ -305,7 +305,7 @@ export const HuntDetailModal: React.FC<HuntDetailModalProps> = ({
                     (lightboxIdx - 1 + hunt.photos.length) % hunt.photos.length
                   );
                 }}
-                className="absolute left-4 rounded-full bg-white/15 p-2 text-white hover:bg-white/25"
+                className="absolute left-2 rounded-full bg-white/15 p-2 text-white hover:bg-white/25 sm:left-4"
                 aria-label="Photo précédente"
               >
                 <ChevronLeft className="h-6 w-6" />
@@ -316,7 +316,7 @@ export const HuntDetailModal: React.FC<HuntDetailModalProps> = ({
                   e.stopPropagation();
                   setLightboxIdx((lightboxIdx + 1) % hunt.photos.length);
                 }}
-                className="absolute right-4 rounded-full bg-white/15 p-2 text-white hover:bg-white/25"
+                className="absolute right-2 rounded-full bg-white/15 p-2 text-white hover:bg-white/25 sm:right-4"
                 aria-label="Photo suivante"
               >
                 <ChevronRight className="h-6 w-6" />

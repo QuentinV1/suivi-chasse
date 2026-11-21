@@ -208,27 +208,27 @@ export const App: React.FC = () => {
         <div className="mx-auto max-w-6xl px-4 py-3.5 sm:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Brand */}
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-earth-400/30 bg-forest-800/80 text-earth-200 shadow-inner">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-earth-400/30 bg-forest-800/80 text-earth-200 shadow-inner">
                 <Trees className="h-5 w-5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <h1 className="text-lg font-bold tracking-tight text-earth-50 sm:text-xl">
+                  <h1 className="truncate text-lg font-bold tracking-tight text-earth-50 sm:text-xl">
                     Carnet de Chasse
                   </h1>
-                  <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-forest-200">
+                  <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-forest-200">
                     v{APP_VERSION}
                   </span>
                 </div>
-                <p className="text-xs text-forest-200">
+                <p className="truncate text-xs text-forest-200">
                   Suivi des sorties &amp; Album trophées
                 </p>
               </div>
             </div>
 
             {/* Actions */}
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
               <button
                 id="btn-auth-header"
                 type="button"
@@ -274,11 +274,11 @@ export const App: React.FC = () => {
           </div>
 
           {/* Navigation Tabs */}
-          <nav className="mt-3 flex flex-wrap gap-1.5 border-t border-white/10 pt-3 sm:gap-2">
+          <nav className="scrollbar-none mt-3 flex flex-nowrap gap-1.5 overflow-x-auto border-t border-white/10 pt-3 sm:flex-wrap sm:gap-2">
             <button
               type="button"
               onClick={() => setActiveTab('hunts')}
-              className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition sm:gap-2 sm:px-3.5 sm:text-sm ${
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition sm:gap-2 sm:px-3.5 sm:text-sm ${
                 activeTab === 'hunts'
                   ? 'bg-earth-50 text-forest-950 shadow-sm'
                   : 'text-forest-100 hover:bg-white/10'
@@ -300,7 +300,7 @@ export const App: React.FC = () => {
             <button
               type="button"
               onClick={() => setActiveTab('trophies')}
-              className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition sm:gap-2 sm:px-3.5 sm:text-sm ${
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition sm:gap-2 sm:px-3.5 sm:text-sm ${
                 activeTab === 'trophies'
                   ? 'bg-earth-50 text-forest-950 shadow-sm'
                   : 'text-forest-100 hover:bg-white/10'
@@ -322,7 +322,7 @@ export const App: React.FC = () => {
             <button
               type="button"
               onClick={() => setActiveTab('stats')}
-              className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition sm:gap-2 sm:px-3.5 sm:text-sm ${
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition sm:gap-2 sm:px-3.5 sm:text-sm ${
                 activeTab === 'stats'
                   ? 'bg-earth-50 text-forest-950 shadow-sm'
                   : 'text-forest-100 hover:bg-white/10'
@@ -335,7 +335,7 @@ export const App: React.FC = () => {
             <button
               type="button"
               onClick={() => setActiveTab('map')}
-              className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition sm:gap-2 sm:px-3.5 sm:text-sm ${
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition sm:gap-2 sm:px-3.5 sm:text-sm ${
                 activeTab === 'map'
                   ? 'bg-earth-50 text-forest-950 shadow-sm'
                   : 'text-forest-100 hover:bg-white/10'
@@ -351,12 +351,12 @@ export const App: React.FC = () => {
       {/* Main Content */}
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
         {user && cloudState.syncError && (
-          <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800 sm:text-sm">
-            <span>{cloudState.syncError}</span>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800 sm:text-sm">
+            <span className="min-w-0 flex-1 break-words">{cloudState.syncError}</span>
             <button
               type="button"
               onClick={() => setIsAuthModalOpen(true)}
-              className="rounded-lg bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-800 hover:bg-red-200"
+              className="shrink-0 rounded-lg bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-800 hover:bg-red-200"
             >
               Compte Cloud
             </button>

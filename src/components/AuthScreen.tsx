@@ -244,12 +244,12 @@ export const AuthScreen: React.FC<CloudModalProps> = ({
       id="modal-auth"
       className="fixed inset-0 z-50 flex items-center justify-center bg-forest-950/60 p-3 backdrop-blur-sm sm:p-6"
     >
-      <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-earth-200 bg-white shadow-2xl">
+      <div className="flex max-h-[90vh] max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-earth-200 bg-white shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-earth-200 bg-forest-900 px-5 py-4 text-white">
-          <div className="flex items-center gap-2.5">
-            <Cloud className="h-5 w-5 text-earth-300" />
-            <div>
+        <div className="flex items-center justify-between gap-3 border-b border-earth-200 bg-forest-900 px-4 py-3.5 text-white sm:px-5 sm:py-4">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <Cloud className="h-5 w-5 shrink-0 text-earth-300" />
+            <div className="min-w-0">
               <h2 className="text-lg font-semibold">Compte Cloud Carnet de Chasse</h2>
               <p className="text-xs text-forest-200">
                 Synchronisation Firestore (quentin-apps-hub)
@@ -259,14 +259,14 @@ export const AuthScreen: React.FC<CloudModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-forest-200 transition hover:bg-white/10 hover:text-white"
+            className="shrink-0 rounded-lg p-1.5 text-forest-200 transition hover:bg-white/10 hover:text-white"
             aria-label="Fermer"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="space-y-4 overflow-y-auto p-5">
+        <div className="space-y-4 overflow-y-auto p-4 sm:p-5">
           {!user ? (
             /* Formulaire de connexion (déconnecté) */
             <div id="auth-logged-out-panel" className="space-y-4">

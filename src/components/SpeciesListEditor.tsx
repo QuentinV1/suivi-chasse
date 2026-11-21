@@ -84,7 +84,7 @@ export const SpeciesListEditor: React.FC<SpeciesListEditorProps> = ({
         <select
           value={selectedSpecies}
           onChange={(e) => setSelectedSpecies(e.target.value)}
-          className="min-w-[140px] flex-1 rounded-lg border border-earth-300 bg-white px-2.5 py-1.5 text-sm text-forest-950 focus:border-forest-600 focus:outline-none focus:ring-2 focus:ring-forest-600/20"
+          className="min-w-[140px] max-w-full flex-1 rounded-lg border border-earth-300 bg-white px-2.5 py-1.5 text-sm text-forest-950 focus:border-forest-600 focus:outline-none focus:ring-2 focus:ring-forest-600/20"
         >
           {COMMON_SPECIES.map((sp) => (
             <option key={sp} value={sp}>

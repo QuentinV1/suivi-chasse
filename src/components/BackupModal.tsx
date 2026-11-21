@@ -170,11 +170,11 @@ export const BackupModal: React.FC<BackupModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-forest-950/60 p-3 backdrop-blur-sm sm:p-6">
-      <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-earth-200 bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-earth-200 bg-forest-900 px-5 py-4 text-white">
-          <div className="flex items-center gap-2.5">
-            <HardDrive className="h-5 w-5 text-earth-300" />
-            <div>
+      <div className="flex max-h-[90vh] max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-earth-200 bg-white shadow-2xl">
+        <div className="flex items-center justify-between gap-3 border-b border-earth-200 bg-forest-900 px-4 py-3.5 text-white sm:px-5 sm:py-4">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <HardDrive className="h-5 w-5 shrink-0 text-earth-300" />
+            <div className="min-w-0">
               <h2 className="text-lg font-semibold">Sauvegarde &amp; Portabilité</h2>
               <p className="text-xs text-forest-200">
                 Stockage 100 % local (IndexedDB) + Export/Import JSON
@@ -184,14 +184,14 @@ export const BackupModal: React.FC<BackupModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-forest-200 transition hover:bg-white/10 hover:text-white"
+            className="shrink-0 rounded-lg p-1.5 text-forest-200 transition hover:bg-white/10 hover:text-white"
             aria-label="Fermer"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="space-y-5 overflow-y-auto p-5">
+        <div className="space-y-5 overflow-y-auto p-4 sm:p-5">
           {/* Storage summary */}
           <div className="rounded-xl border border-earth-200 bg-earth-50/70 p-4">
             <div className="flex items-center justify-between text-sm">
@@ -288,7 +288,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
             )}
           </div>
 
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-earth-200 bg-earth-50/60 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-earth-200 bg-earth-50/60 p-4 sm:flex-nowrap">
             <div className="min-w-0">
               <h3 className="text-sm font-bold text-forest-950">Mes autres applications</h3>
               <p className="text-xs text-forest-600">
@@ -313,7 +313,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
           onClick={() => setShowOtherApps(false)}
         >
           <div
-            className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+            className="flex max-h-[85vh] max-h-[85dvh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-earth-200 px-5 py-4">

@@ -497,7 +497,7 @@ export const HuntsView: React.FC<HuntsViewProps> = ({
                 <div>
                   {/* Top row */}
                   <div className="flex items-start justify-between gap-3">
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="inline-flex items-center gap-1 rounded-full bg-forest-100 px-2.5 py-0.5 text-xs font-semibold text-forest-800">
                           {hunt.huntType}
@@ -509,12 +509,12 @@ export const HuntsView: React.FC<HuntsViewProps> = ({
                       </div>
                       <h3 className="mt-2 flex items-center gap-1.5 text-lg font-semibold text-forest-950 group-hover:text-forest-700">
                         <MapPin className="h-4 w-4 shrink-0 text-earth-500" />
-                        <span className="line-clamp-1">{hunt.location}</span>
+                        <span className="line-clamp-1 break-words">{hunt.location}</span>
                       </h3>
                     </div>
 
                     <div
-                      className="flex items-center gap-1"
+                      className="flex shrink-0 items-center gap-1"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <button

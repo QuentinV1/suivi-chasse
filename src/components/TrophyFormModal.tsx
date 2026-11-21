@@ -117,12 +117,12 @@ export const TrophyFormModal: React.FC<TrophyFormModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-forest-950/60 p-3 backdrop-blur-sm sm:p-6">
-      <div className="flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-earth-200 bg-white shadow-2xl">
+      <div className="flex max-h-[90vh] max-h-[90dvh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-earth-200 bg-white shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-earth-200 bg-forest-900 px-5 py-4 text-white">
-          <div className="flex items-center gap-2.5">
-            <Award className="h-5 w-5 text-earth-300" />
-            <div>
+        <div className="flex items-center justify-between gap-3 border-b border-earth-200 bg-forest-900 px-4 py-3.5 text-white sm:px-5 sm:py-4">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <Award className="h-5 w-5 shrink-0 text-earth-300" />
+            <div className="min-w-0">
               <h2 className="text-lg font-semibold">
                 {initialTrophy ? 'Modifier le trophée' : 'Nouveau trophée'}
               </h2>
@@ -134,14 +134,14 @@ export const TrophyFormModal: React.FC<TrophyFormModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-forest-200 transition hover:bg-white/10 hover:text-white"
+            className="shrink-0 rounded-lg p-1.5 text-forest-200 transition hover:bg-white/10 hover:text-white"
             aria-label="Fermer"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto p-5">
+        <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
           {error && (
             <div className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-800">
               {error}
@@ -344,18 +344,18 @@ export const TrophyFormModal: React.FC<TrophyFormModalProps> = ({
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-2.5 border-t border-earth-200 pt-4">
+          <div className="flex flex-col-reverse gap-2 border-t border-earth-200 pt-4 sm:flex-row sm:items-center sm:justify-end sm:gap-2.5">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-earth-300 px-4 py-2 text-sm font-medium text-earth-800 transition hover:bg-earth-100"
+              className="w-full rounded-xl border border-earth-300 px-4 py-2 text-sm font-medium text-earth-800 transition hover:bg-earth-100 sm:w-auto"
             >
               Annuler
             </button>
             <button
               type="submit"
               disabled={isSaving || isCompressing}
-              className="inline-flex items-center gap-2 rounded-xl bg-forest-700 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-forest-800 disabled:opacity-50"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-forest-700 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-forest-800 disabled:opacity-50 sm:w-auto"
             >
               {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
               {initialTrophy ? 'Enregistrer' : 'Ajouter à l’album'}

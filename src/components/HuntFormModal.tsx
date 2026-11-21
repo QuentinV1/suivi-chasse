@@ -129,10 +129,10 @@ export const HuntFormModal: React.FC<HuntFormModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-forest-950/60 p-3 backdrop-blur-sm sm:p-6">
-      <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-earth-200 bg-white shadow-2xl">
+      <div className="flex max-h-[90vh] max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-earth-200 bg-white shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-earth-200 bg-forest-900 px-5 py-4 text-white">
-          <div>
+        <div className="flex items-center justify-between gap-3 border-b border-earth-200 bg-forest-900 px-4 py-3.5 text-white sm:px-5 sm:py-4">
+          <div className="min-w-0">
             <h2 className="text-lg font-semibold">
               {initialHunt ? 'Modifier la sortie de chasse' : 'Nouvelle sortie de chasse'}
             </h2>
@@ -143,7 +143,7 @@ export const HuntFormModal: React.FC<HuntFormModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-forest-200 transition hover:bg-white/10 hover:text-white"
+            className="shrink-0 rounded-lg p-1.5 text-forest-200 transition hover:bg-white/10 hover:text-white"
             aria-label="Fermer"
           >
             <X className="h-5 w-5" />
@@ -151,7 +151,7 @@ export const HuntFormModal: React.FC<HuntFormModalProps> = ({
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="flex-1 space-y-5 overflow-y-auto p-5">
+        <form onSubmit={handleSubmit} className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-5">
           {error && (
             <div className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-800">
               {error}
@@ -316,19 +316,19 @@ export const HuntFormModal: React.FC<HuntFormModalProps> = ({
               <Users className="h-3.5 w-3.5" />
               Participants
             </label>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <input
                 type="text"
                 value={participantInput}
                 onChange={(e) => setParticipantInput(e.target.value)}
                 onKeyDown={handleParticipantKeyDown}
                 placeholder="Prénom ou surnom (Entrée pour ajouter)"
-                className="flex-1 rounded-xl border border-earth-300 bg-earth-50/50 px-3 py-2 text-sm text-forest-950 focus:border-forest-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-forest-600/20"
+                className="min-w-0 flex-1 rounded-xl border border-earth-300 bg-earth-50/50 px-3 py-2 text-sm text-forest-950 focus:border-forest-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-forest-600/20"
               />
               <button
                 type="button"
                 onClick={handleAddParticipant}
-                className="inline-flex items-center gap-1 rounded-xl border border-earth-300 bg-earth-100 px-3 py-2 text-sm font-medium text-forest-900 transition hover:bg-earth-200"
+                className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-earth-300 bg-earth-100 px-3 py-2 text-sm font-medium text-forest-900 transition hover:bg-earth-200"
               >
                 <Plus className="h-4 w-4" />
                 Ajouter
@@ -377,7 +377,7 @@ export const HuntFormModal: React.FC<HuntFormModalProps> = ({
 
           {/* Photos */}
           <div>
-            <div className="mb-1.5 flex items-center justify-between">
+            <div className="mb-1.5 flex flex-wrap items-center justify-between gap-1">
               <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-earth-700">
                 <Camera className="h-3.5 w-3.5" />
                 Photos de la sortie
@@ -453,18 +453,18 @@ export const HuntFormModal: React.FC<HuntFormModalProps> = ({
           </div>
 
           {/* Footer actions */}
-          <div className="flex items-center justify-end gap-2.5 border-t border-earth-200 pt-4">
+          <div className="flex flex-col-reverse gap-2 border-t border-earth-200 pt-4 sm:flex-row sm:items-center sm:justify-end sm:gap-2.5">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-earth-300 px-4 py-2 text-sm font-medium text-earth-800 transition hover:bg-earth-100"
+              className="w-full rounded-xl border border-earth-300 px-4 py-2 text-sm font-medium text-earth-800 transition hover:bg-earth-100 sm:w-auto"
             >
               Annuler
             </button>
             <button
               type="submit"
               disabled={isSaving || isCompressing}
-              className="inline-flex items-center gap-2 rounded-xl bg-forest-700 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-forest-800 disabled:opacity-50"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-forest-700 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-forest-800 disabled:opacity-50 sm:w-auto"
             >
               {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
               {initialHunt ? 'Enregistrer les modifications' : 'Enregistrer la sortie'}

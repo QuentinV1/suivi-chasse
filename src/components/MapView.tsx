@@ -404,7 +404,7 @@ export const MapView: React.FC<MapViewProps> = ({
           const delta = e.deltaY < 0 ? 1 : -1;
           setZoom((z) => Math.max(3, Math.min(18, z + delta)));
         }}
-        className={`relative h-[460px] w-full select-none overflow-hidden rounded-2xl border border-earth-300 shadow-inner touch-none ${
+        className={`relative h-[380px] w-full select-none overflow-hidden rounded-2xl border border-earth-300 shadow-inner touch-none sm:h-[460px] ${
           isPlacingHunt ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'
         } ${offlineMode ? 'bg-[#e8ece2]' : 'bg-earth-100'}`}
       >
@@ -543,7 +543,7 @@ export const MapView: React.FC<MapViewProps> = ({
         </div>
 
         {/* Scale & Coords Overlay */}
-        <div className="pointer-events-none absolute bottom-3 left-3 flex flex-wrap items-center gap-2 rounded-xl border border-earth-300/80 bg-white/90 px-3 py-1.5 text-[11px] font-medium text-forest-950 backdrop-blur-sm">
+        <div className="pointer-events-none absolute bottom-3 left-3 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-2 rounded-xl border border-earth-300/80 bg-white/90 px-3 py-1.5 text-[11px] font-medium text-forest-950 backdrop-blur-sm">
           <span>N ↑</span>
           <span className="h-3 w-px bg-earth-300" />
           <span className="inline-flex items-center gap-1.5">
@@ -555,7 +555,7 @@ export const MapView: React.FC<MapViewProps> = ({
         </div>
 
         {gpsStatus && (
-          <div className="pointer-events-none absolute left-3 top-3 rounded-xl border border-earth-300 bg-white/95 px-3 py-1.5 text-xs font-medium text-forest-900 shadow-sm">
+          <div className="pointer-events-none absolute left-3 top-3 max-w-[calc(100%-4.5rem)] rounded-xl border border-earth-300 bg-white/95 px-3 py-1.5 text-xs font-medium text-forest-900 shadow-sm">
             {gpsStatus}
           </div>
         )}
@@ -564,9 +564,9 @@ export const MapView: React.FC<MapViewProps> = ({
       {/* Selected Marker Card */}
       {selectedMarker && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-forest-200 bg-white p-4 shadow-sm">
-          <div>
-            <p className="text-sm font-bold text-forest-950">{selectedMarker.title}</p>
-            <p className="text-xs text-earth-700">{selectedMarker.subtitle}</p>
+          <div className="min-w-0 flex-1">
+            <p className="break-words text-sm font-bold text-forest-950">{selectedMarker.title}</p>
+            <p className="break-words text-xs text-earth-700">{selectedMarker.subtitle}</p>
             <p className="mt-1 text-[11px] text-earth-600">
               GPS : {formatCoords(selectedMarker.lat, selectedMarker.lng)}
               {userGps && (
@@ -577,7 +577,7 @@ export const MapView: React.FC<MapViewProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {selectedMarker.hunt && (
               <button
                 type="button"

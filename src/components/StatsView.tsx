@@ -203,11 +203,11 @@ export const StatsView: React.FC<StatsViewProps> = ({ hunts, trophies }) => {
           <span>Statistiques cynégétiques</span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <select
             value={seasonFilter}
             onChange={(e) => setSeasonFilter(e.target.value)}
-            className="rounded-xl border border-earth-300 bg-earth-50/50 px-3 py-1.5 text-sm text-forest-950 focus:border-forest-600 focus:bg-white focus:outline-none"
+            className="w-full min-w-0 max-w-full rounded-xl border border-earth-300 bg-earth-50/50 px-3 py-1.5 text-sm text-forest-950 focus:border-forest-600 focus:bg-white focus:outline-none sm:w-auto"
           >
             <option value="all">Toutes saisons</option>
             {availableSeasons.map((s) => (
@@ -220,7 +220,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ hunts, trophies }) => {
           <select
             value={territoryFilter}
             onChange={(e) => setTerritoryFilter(e.target.value)}
-            className="rounded-xl border border-earth-300 bg-earth-50/50 px-3 py-1.5 text-sm text-forest-950 focus:border-forest-600 focus:bg-white focus:outline-none"
+            className="w-full min-w-0 max-w-full rounded-xl border border-earth-300 bg-earth-50/50 px-3 py-1.5 text-sm text-forest-950 focus:border-forest-600 focus:bg-white focus:outline-none sm:w-auto sm:max-w-[220px]"
           >
             <option value="all">Tous territoires</option>
             {availableTerritories.map((loc) => (
@@ -305,7 +305,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ hunts, trophies }) => {
       ) : (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
           {/* Par Saison */}
-          <section className="rounded-2xl border border-earth-200 bg-white p-5 shadow-sm">
+          <section className="min-w-0 rounded-2xl border border-earth-200 bg-white p-4 shadow-sm sm:p-5">
             <h3 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-forest-950">
               <Compass className="h-4 w-4 text-forest-700" />
               Bilan par saison
@@ -317,23 +317,23 @@ export const StatsView: React.FC<StatsViewProps> = ({ hunts, trophies }) => {
                 <table className="w-full text-left text-sm">
                   <thead>
                     <tr className="border-b border-earth-200 text-xs text-earth-600">
-                      <th className="pb-2 font-semibold">Saison</th>
-                      <th className="pb-2 text-right font-semibold">Sorties</th>
-                      <th className="pb-2 text-right font-semibold">Vu</th>
-                      <th className="pb-2 text-right font-semibold">Prélevé</th>
-                      <th className="pb-2 text-right font-semibold">Trophées</th>
+                      <th className="whitespace-nowrap pb-2 pr-3 font-semibold">Saison</th>
+                      <th className="whitespace-nowrap pb-2 px-2 text-right font-semibold">Sorties</th>
+                      <th className="whitespace-nowrap pb-2 px-2 text-right font-semibold">Vu</th>
+                      <th className="whitespace-nowrap pb-2 px-2 text-right font-semibold">Prélevé</th>
+                      <th className="whitespace-nowrap pb-2 pl-2 text-right font-semibold">Trophées</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-earth-100">
                     {bySeason.map((row) => (
                       <tr key={row.season} className="text-forest-950">
-                        <td className="py-2.5 font-semibold">{row.season}</td>
-                        <td className="py-2.5 text-right">{row.hunts}</td>
-                        <td className="py-2.5 text-right text-forest-700">{row.seen}</td>
-                        <td className="py-2.5 text-right font-semibold text-copper-600">
+                        <td className="whitespace-nowrap py-2.5 pr-3 font-semibold">{row.season}</td>
+                        <td className="whitespace-nowrap py-2.5 px-2 text-right">{row.hunts}</td>
+                        <td className="whitespace-nowrap py-2.5 px-2 text-right text-forest-700">{row.seen}</td>
+                        <td className="whitespace-nowrap py-2.5 px-2 text-right font-semibold text-copper-600">
                           {row.harvested}
                         </td>
-                        <td className="py-2.5 text-right">{row.trophies}</td>
+                        <td className="whitespace-nowrap py-2.5 pl-2 text-right">{row.trophies}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -343,7 +343,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ hunts, trophies }) => {
           </section>
 
           {/* Par Espèce */}
-          <section className="rounded-2xl border border-earth-200 bg-white p-5 shadow-sm">
+          <section className="min-w-0 rounded-2xl border border-earth-200 bg-white p-4 shadow-sm sm:p-5">
             <h3 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-forest-950">
               <Crosshair className="h-4 w-4 text-copper-600" />
               Par espèce (Vu vs Prélevé)
@@ -388,7 +388,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ hunts, trophies }) => {
           </section>
 
           {/* Par Territoire */}
-          <section className="rounded-2xl border border-earth-200 bg-white p-5 shadow-sm">
+          <section className="min-w-0 rounded-2xl border border-earth-200 bg-white p-4 shadow-sm sm:p-5">
             <h3 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-forest-950">
               <MapPin className="h-4 w-4 text-earth-700" />
               Par territoire / lieu
@@ -402,13 +402,13 @@ export const StatsView: React.FC<StatsViewProps> = ({ hunts, trophies }) => {
                     key={terr.location}
                     className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-earth-100 bg-earth-50/60 px-3.5 py-2.5 text-xs"
                   >
-                    <div>
-                      <p className="font-semibold text-forest-950">{terr.location}</p>
+                    <div className="min-w-0">
+                      <p className="break-words font-semibold text-forest-950">{terr.location}</p>
                       <p className="text-[11px] text-earth-600">
                         Dernière sortie : {formatShortDateFr(terr.lastDate)}
                       </p>
                     </div>
-                    <div className="flex items-center gap-3 font-medium">
+                    <div className="flex flex-wrap items-center gap-2 font-medium sm:gap-3">
                       <span className="rounded-md bg-white px-2 py-0.5 text-forest-900">
                         {terr.hunts} sortie{terr.hunts > 1 ? 's' : ''}
                       </span>
@@ -422,7 +422,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ hunts, trophies }) => {
           </section>
 
           {/* Par Mode de chasse */}
-          <section className="rounded-2xl border border-earth-200 bg-white p-5 shadow-sm">
+          <section className="min-w-0 rounded-2xl border border-earth-200 bg-white p-4 shadow-sm sm:p-5">
             <h3 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-forest-950">
               <Award className="h-4 w-4 text-forest-700" />
               Répartition par type de chasse
@@ -438,7 +438,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ hunts, trophies }) => {
                       : 0;
                   return (
                     <div key={ht.huntType} className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
+                      <div className="flex flex-wrap items-center justify-between gap-1 text-xs">
                         <span className="font-semibold text-forest-950">{ht.huntType}</span>
                         <span className="text-earth-700">
                           {ht.hunts} sortie{ht.hunts > 1 ? 's' : ''} ({pct}%) •{' '}

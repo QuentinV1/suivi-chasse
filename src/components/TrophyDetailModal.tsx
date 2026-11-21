@@ -50,7 +50,7 @@ export const TrophyDetailModal: React.FC<TrophyDetailModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-forest-950/75 p-3 backdrop-blur-sm sm:p-6">
-      <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-earth-200 bg-white shadow-2xl">
+      <div className="flex max-h-[90vh] max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-earth-200 bg-white shadow-2xl">
         {/* Image / Visual Header */}
         <div className="relative bg-forest-950">
           {trophy.photo ? (
@@ -79,7 +79,7 @@ export const TrophyDetailModal: React.FC<TrophyDetailModalProps> = ({
         </div>
 
         {/* Details */}
-        <div className="flex-1 space-y-4 overflow-y-auto p-5">
+        <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
           <div>
             <span className="inline-flex items-center rounded-full bg-copper-500/15 px-3 py-0.5 text-xs font-semibold text-copper-600">
               {trophy.species}
@@ -144,7 +144,7 @@ export const TrophyDetailModal: React.FC<TrophyDetailModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-earth-200 bg-earth-50/60 px-5 py-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-earth-200 bg-earth-50/60 px-4 py-3 sm:px-5 sm:py-3.5">
           <button
             type="button"
             onClick={handleDelete}

@@ -259,7 +259,7 @@ export const TrophiesView: React.FC<TrophiesViewProps> = ({
                     {formatShortDateFr(trophy.date)}
                   </span>
                   {trophy.location && (
-                    <span className="flex max-w-[55%] items-center gap-1 truncate">
+                    <span className="flex min-w-0 max-w-[55%] items-center gap-1 truncate">
                       <MapPin className="h-3.5 w-3.5 shrink-0" />
                       <span className="truncate">{trophy.location}</span>
                     </span>
