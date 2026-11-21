@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -121,6 +122,7 @@ export const AuthScreen: React.FC = () => {
         if (trimmedName) {
           await updateProfile(cred.user, { displayName: trimmedName });
         }
+        await sendEmailVerification(cred.user);
       } else {
         await sendPasswordResetEmail(auth, trimmedEmail);
         setInfo(

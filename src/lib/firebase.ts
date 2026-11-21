@@ -9,12 +9,22 @@ import {
 } from 'firebase/firestore';
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey:
+    import.meta.env.VITE_FIREBASE_API_KEY ||
+    'AIzaSyCuYM0tMpd1f1jDYz27OhCaPpcAWhI3i48',
+  authDomain:
+    import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ||
+    'quentin-apps-hub.firebaseapp.com',
+  projectId:
+    import.meta.env.VITE_FIREBASE_PROJECT_ID || 'quentin-apps-hub',
+  storageBucket:
+    import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ||
+    'quentin-apps-hub.firebasestorage.app',
+  messagingSenderId:
+    import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '249016348389',
+  appId:
+    import.meta.env.VITE_FIREBASE_APP_ID ||
+    '1:249016348389:web:16a04a526cbe46c59cee0c',
 };
 
 export const isFirebaseConfigured = Boolean(

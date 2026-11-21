@@ -5,20 +5,30 @@ import {
   getDocs,
   onSnapshot,
   setDoc,
+  Timestamp,
   writeBatch,
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Hunt, Trophy } from '../types';
 
-const HUNTS_COLLECTION = 'hunts';
-const TROPHIES_COLLECTION = 'trophies';
+const HUNTS_COLLECTION = 'chasse_hunts';
+const TROPHIES_COLLECTION = 'chasse_trophies';
 
 // Legacy local storage constants (used to offer one-click migration of pre-auth data)
 const LEGACY_DB_NAME = 'suivi-chasse-db';
 const LEGACY_DB_VERSION = 1;
+const LEGACY_HUNTS_STORE = 'hunts';
+const LEGACY_TROPHIES_STORE = 'trophies';
 const LEGACY_FALLBACK_HUNTS_KEY = 'suivi_chasse_hunts_fallback_v1';
 const LEGACY_FALLBACK_TROPHIES_KEY = 'suivi_chasse_trophies_fallback_v1';
+
+interface UserSubdoc<T> {
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  title: string;
+  payload: T;
+}
 
 function requireDb() {
   if (!db) {
@@ -46,6 +56,45 @@ function stripUndefined<T>(value: T): T {
   return value;
 }
 
+function toFirestoreTimestamp(isoString?: string): Timestamp {
+  if (isoString) {
+    const ms = Date.parse(isoString);
+    if (!Number.isNaN(ms)) {
+      return Timestamp.fromMillis(ms);
+    }
+  }
+  return Timestamp.now();
+}
+
+function toHuntSubdoc(hunt: Hunt): UserSubdoc<Hunt> {
+  const title = `${hunt.date} — ${hunt.location || hunt.huntType}`.slice(0, 200);
+  return {
+    createdAt: toFirestoreTimestamp(hunt.createdAt),
+    updatedAt: Timestamp.now(),
+    title,
+    payload: stripUndefined(hunt),
+  };
+}
+
+function toTrophySubdoc(trophy: Trophy): UserSubdoc<Trophy> {
+  const title = `${trophy.title || trophy.species} (${trophy.date})`.slice(0, 200);
+  return {
+    createdAt: toFirestoreTimestamp(trophy.createdAt),
+    updatedAt: Timestamp.now(),
+    title,
+    payload: stripUndefined(trophy),
+  };
+}
+
+function fromSubdoc<T>(raw: unknown): T | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const obj = raw as Record<string, unknown>;
+  if (obj.payload && typeof obj.payload === 'object') {
+    return obj.payload as T;
+  }
+  return obj as T;
+}
+
 function sortByDateDesc<T extends { date: string; createdAt: string }>(items: T[]): T[] {
   return items.sort(
     (a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)
@@ -68,7 +117,9 @@ export function subscribeToHunts(
   return onSnapshot(
     userHuntsCollection(userId),
     (snapshot) => {
-      const hunts = snapshot.docs.map((d) => d.data() as Hunt);
+      const hunts = snapshot.docs
+        .map((d) => fromSubdoc<Hunt>(d.data()))
+        .filter((h): h is Hunt => h !== null);
       onData(sortByDateDesc(hunts));
     },
     (err) => {
@@ -85,7 +136,9 @@ export function subscribeToTrophies(
   return onSnapshot(
     userTrophiesCollection(userId),
     (snapshot) => {
-      const trophies = snapshot.docs.map((d) => d.data() as Trophy);
+      const trophies = snapshot.docs
+        .map((d) => fromSubdoc<Trophy>(d.data()))
+        .filter((t): t is Trophy => t !== null);
       onData(sortByDateDesc(trophies));
     },
     (err) => {
@@ -96,13 +149,15 @@ export function subscribeToTrophies(
 
 export async function getAllHunts(userId: string): Promise<Hunt[]> {
   const snapshot = await getDocs(userHuntsCollection(userId));
-  const hunts = snapshot.docs.map((d) => d.data() as Hunt);
+  const hunts = snapshot.docs
+    .map((d) => fromSubdoc<Hunt>(d.data()))
+    .filter((h): h is Hunt => h !== null);
   return sortByDateDesc(hunts);
 }
 
 export async function saveHunt(userId: string, hunt: Hunt): Promise<void> {
   const ref = doc(requireDb(), 'users', userId, HUNTS_COLLECTION, hunt.id);
-  await setDoc(ref, stripUndefined(hunt));
+  await setDoc(ref, toHuntSubdoc(hunt));
 }
 
 export async function deleteHunt(userId: string, id: string): Promise<void> {
@@ -112,13 +167,15 @@ export async function deleteHunt(userId: string, id: string): Promise<void> {
 
 export async function getAllTrophies(userId: string): Promise<Trophy[]> {
   const snapshot = await getDocs(userTrophiesCollection(userId));
-  const trophies = snapshot.docs.map((d) => d.data() as Trophy);
+  const trophies = snapshot.docs
+    .map((d) => fromSubdoc<Trophy>(d.data()))
+    .filter((t): t is Trophy => t !== null);
   return sortByDateDesc(trophies);
 }
 
 export async function saveTrophy(userId: string, trophy: Trophy): Promise<void> {
   const ref = doc(requireDb(), 'users', userId, TROPHIES_COLLECTION, trophy.id);
-  await setDoc(ref, stripUndefined(trophy));
+  await setDoc(ref, toTrophySubdoc(trophy));
 }
 
 export async function deleteTrophy(userId: string, id: string): Promise<void> {
@@ -162,11 +219,11 @@ export async function replaceAllData(
   }
   for (const hunt of hunts) {
     const ref = doc(firestore, 'users', userId, HUNTS_COLLECTION, hunt.id);
-    ops.push((batch) => batch.set(ref, stripUndefined(hunt)));
+    ops.push((batch) => batch.set(ref, toHuntSubdoc(hunt)));
   }
   for (const trophy of trophies) {
     const ref = doc(firestore, 'users', userId, TROPHIES_COLLECTION, trophy.id);
-    ops.push((batch) => batch.set(ref, stripUndefined(trophy)));
+    ops.push((batch) => batch.set(ref, toTrophySubdoc(trophy)));
   }
 
   await commitBatchedOps(ops);
@@ -182,11 +239,11 @@ export async function mergeData(
 
   for (const hunt of hunts) {
     const ref = doc(firestore, 'users', userId, HUNTS_COLLECTION, hunt.id);
-    ops.push((batch) => batch.set(ref, stripUndefined(hunt), { merge: true }));
+    ops.push((batch) => batch.set(ref, toHuntSubdoc(hunt)));
   }
   for (const trophy of trophies) {
     const ref = doc(firestore, 'users', userId, TROPHIES_COLLECTION, trophy.id);
-    ops.push((batch) => batch.set(ref, stripUndefined(trophy), { merge: true }));
+    ops.push((batch) => batch.set(ref, toTrophySubdoc(trophy)));
   }
 
   await commitBatchedOps(ops);
@@ -203,11 +260,11 @@ function openLegacyDatabase(): Promise<IDBDatabase> {
     const request = indexedDB.open(LEGACY_DB_NAME, LEGACY_DB_VERSION);
     request.onupgradeneeded = () => {
       const idb = request.result;
-      if (!idb.objectStoreNames.contains(HUNTS_COLLECTION)) {
-        idb.createObjectStore(HUNTS_COLLECTION, { keyPath: 'id' });
+      if (!idb.objectStoreNames.contains(LEGACY_HUNTS_STORE)) {
+        idb.createObjectStore(LEGACY_HUNTS_STORE, { keyPath: 'id' });
       }
-      if (!idb.objectStoreNames.contains(TROPHIES_COLLECTION)) {
-        idb.createObjectStore(TROPHIES_COLLECTION, { keyPath: 'id' });
+      if (!idb.objectStoreNames.contains(LEGACY_TROPHIES_STORE)) {
+        idb.createObjectStore(LEGACY_TROPHIES_STORE, { keyPath: 'id' });
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -241,8 +298,8 @@ export async function getLegacyLocalData(): Promise<{
   trophies: Trophy[];
 }> {
   const [hunts, trophies] = await Promise.all([
-    readLegacyStore<Hunt>(HUNTS_COLLECTION, LEGACY_FALLBACK_HUNTS_KEY),
-    readLegacyStore<Trophy>(TROPHIES_COLLECTION, LEGACY_FALLBACK_TROPHIES_KEY),
+    readLegacyStore<Hunt>(LEGACY_HUNTS_STORE, LEGACY_FALLBACK_HUNTS_KEY),
+    readLegacyStore<Trophy>(LEGACY_TROPHIES_STORE, LEGACY_FALLBACK_TROPHIES_KEY),
   ]);
   return { hunts, trophies };
 }
@@ -251,9 +308,9 @@ export async function clearLegacyLocalData(): Promise<void> {
   try {
     const idb = await openLegacyDatabase();
     await new Promise<void>((resolve, reject) => {
-      const tx = idb.transaction([HUNTS_COLLECTION, TROPHIES_COLLECTION], 'readwrite');
-      tx.objectStore(HUNTS_COLLECTION).clear();
-      tx.objectStore(TROPHIES_COLLECTION).clear();
+      const tx = idb.transaction([LEGACY_HUNTS_STORE, LEGACY_TROPHIES_STORE], 'readwrite');
+      tx.objectStore(LEGACY_HUNTS_STORE).clear();
+      tx.objectStore(LEGACY_TROPHIES_STORE).clear();
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
