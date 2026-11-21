@@ -7,3 +7,4 @@ dist-ssr
 .testeurs
 .DS_Store
 Thumbs.db
+firebase-debug.log

@@ -1,30 +1,42 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   createUserWithEmailAndPassword,
   sendEmailVerification,
-  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
-  updateProfile,
+  signOut,
+  type User,
 } from 'firebase/auth';
 import {
-  Trees,
+  X,
+  Cloud,
+  RefreshCw,
+  LogOut,
+  AlertCircle,
+  Loader2,
   Mail,
   Lock,
-  User as UserIcon,
-  LogIn,
-  UserPlus,
-  Loader2,
-  AlertCircle,
-  CheckCircle2,
-  KeyRound,
 } from 'lucide-react';
 import { auth, googleProvider, isFirebaseConfigured } from '../lib/firebase';
+import {
+  arreterListenersFirestore,
+  forcerSyncCloud,
+  reinitialiserEtatCloud,
+  type CloudState,
+} from '../utils/db';
 
-type AuthMode = 'login' | 'register' | 'reset';
+interface CloudModalProps {
+  user: User | null;
+  cloudState: CloudState;
+  totalItemsCount: number;
+  onClose: () => void;
+  onRestartSync: () => void;
+  onUserReloaded: (user: User | null) => void;
+}
 
-function getFriendlyAuthError(code?: string): string {
-  switch (code) {
+function getFriendlyAuthError(err: unknown): string {
+  const fbErr = err as { code?: string; message?: string };
+  switch (fbErr?.code) {
     case 'auth/invalid-email':
       return 'Adresse e-mail invalide.';
     case 'auth/user-disabled':
@@ -44,332 +56,419 @@ function getFriendlyAuthError(code?: string): string {
     case 'auth/popup-blocked':
       return 'La fenêtre Google a été bloquée par votre navigateur. Autorisez les popups pour ce site.';
     case 'auth/unauthorized-domain':
-      return 'Ce domaine n’est pas autorisé dans la console Firebase (Authentication > Settings > Authorized domains).';
+      return 'Ce domaine n’est pas autorisé dans la console Firebase.';
     case 'auth/network-request-failed':
       return 'Erreur réseau. Vérifiez votre connexion Internet.';
     default:
-      return 'Une erreur est survenue lors de l’authentification.';
+      return fbErr?.message || 'Erreur de connexion.';
   }
 }
 
-export const AuthScreen: React.FC = () => {
-  const [mode, setMode] = useState<AuthMode>('login');
-  const [displayName, setDisplayName] = useState('');
+export const AuthScreen: React.FC<CloudModalProps> = ({
+  user,
+  cloudState,
+  totalItemsCount,
+  onClose,
+  onRestartSync,
+  onUserReloaded,
+}) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [syncActionError, setSyncActionError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
+  const [isForceSyncing, setIsForceSyncing] = useState(false);
+  const [isResendingVerif, setIsResendingVerif] = useState(false);
+  const [isCheckingVerif, setIsCheckingVerif] = useState(false);
+  const [unverifiedMsg, setUnverifiedMsg] = useState<string>(
+    'Vérifiez votre boîte mail (ou utilisez « Continuer avec Google »).'
+  );
 
-  if (!isFirebaseConfigured || !auth || !googleProvider) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-earth-50 px-4 py-10 text-forest-950">
-        <div className="w-full max-w-lg rounded-2xl border border-earth-200 bg-white p-6 shadow-lg sm:p-8">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-forest-900 text-earth-100">
-              <Trees className="h-6 w-6" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-forest-950">Carnet de Chasse</h1>
-              <p className="text-xs text-earth-600">Configuration Firebase requise</p>
-            </div>
-          </div>
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
-          <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            <p className="font-semibold">Variables d’environnement manquantes</p>
-            <p className="mt-1 text-xs leading-relaxed">
-              Renseignez vos clés Firebase dans un fichier{' '}
-              <code className="rounded bg-amber-100 px-1 py-0.5 font-mono">.env.local</code> (voir{' '}
-              <code className="rounded bg-amber-100 px-1 py-0.5 font-mono">.env.example</code>) ou
-              dans les secrets GitHub Actions pour activer la connexion utilisateur et Firestore :
-            </p>
-            <ul className="mt-2 list-disc space-y-0.5 pl-4 font-mono text-xs">
-              <li>VITE_FIREBASE_API_KEY</li>
-              <li>VITE_FIREBASE_AUTH_DOMAIN</li>
-              <li>VITE_FIREBASE_PROJECT_ID</li>
-              <li>VITE_FIREBASE_STORAGE_BUCKET</li>
-              <li>VITE_FIREBASE_MESSAGING_SENDER_ID</li>
-              <li>VITE_FIREBASE_APP_ID</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const handleEmailAuth = async (isRegister: boolean) => {
+    setAuthError(null);
+    if (!isFirebaseConfigured || !auth) {
+      setAuthError('Firebase indisponible hors-ligne.');
+      return;
+    }
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) {
+      setAuthError('Veuillez renseigner votre e-mail et votre mot de passe.');
+      return;
+    }
 
-  const switchMode = (nextMode: AuthMode) => {
-    setMode(nextMode);
-    setError(null);
-    setInfo(null);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!auth) return;
-
-    setError(null);
-    setInfo(null);
     setIsSubmitting(true);
-
     try {
-      const trimmedEmail = email.trim();
-      if (mode === 'login') {
-        await signInWithEmailAndPassword(auth, trimmedEmail, password);
-      } else if (mode === 'register') {
+      if (isRegister) {
         const cred = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
-        const trimmedName = displayName.trim();
-        if (trimmedName) {
-          await updateProfile(cred.user, { displayName: trimmedName });
+        if (cred.user) {
+          sendEmailVerification(cred.user).catch(() => {});
         }
-        await sendEmailVerification(cred.user);
       } else {
-        await sendPasswordResetEmail(auth, trimmedEmail);
-        setInfo(
-          'Un e-mail de réinitialisation vient d’être envoyé si un compte correspond à cette adresse.'
-        );
+        await signInWithEmailAndPassword(auth, trimmedEmail, password);
       }
+      onClose();
     } catch (err) {
-      const firebaseErr = err as { code?: string };
-      setError(getFriendlyAuthError(firebaseErr.code));
+      setAuthError(getFriendlyAuthError(err));
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    if (!auth || !googleProvider) return;
-    setError(null);
-    setInfo(null);
-    setIsGoogleLoading(true);
+  const handleGoogleAuth = async () => {
+    setAuthError(null);
+    if (!isFirebaseConfigured || !auth || !googleProvider) {
+      setAuthError('Firebase indisponible hors-ligne.');
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
       await signInWithPopup(auth, googleProvider);
+      onClose();
     } catch (err) {
-      const firebaseErr = err as { code?: string };
-      setError(getFriendlyAuthError(firebaseErr.code));
+      setAuthError(getFriendlyAuthError(err));
     } finally {
-      setIsGoogleLoading(false);
+      setIsSubmitting(false);
     }
   };
 
-  const busy = isSubmitting || isGoogleLoading;
+  const handleForceSync = async () => {
+    setSyncActionError(null);
+    setIsForceSyncing(true);
+    try {
+      await forcerSyncCloud();
+    } catch (err) {
+      setSyncActionError(
+        err instanceof Error ? err.message : 'Impossible de synchroniser.'
+      );
+    } finally {
+      setIsForceSyncing(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    if (!window.confirm('Se déconnecter du compte Cloud ?')) return;
+    arreterListenersFirestore();
+    if (auth) {
+      await signOut(auth);
+    }
+    reinitialiserEtatCloud();
+    onClose();
+  };
+
+  const handleResendVerification = async () => {
+    if (!auth?.currentUser) return;
+    setIsResendingVerif(true);
+    try {
+      if (auth.currentUser.emailVerified) {
+        setUnverifiedMsg('Votre adresse est déjà vérifiée.');
+      } else {
+        await sendEmailVerification(auth.currentUser);
+        setUnverifiedMsg(
+          'E-mail de vérification envoyé ! Vérifiez votre boîte de réception (et les spams), puis cliquez sur « J\'ai vérifié ».'
+        );
+      }
+    } catch (err) {
+      setUnverifiedMsg(
+        err instanceof Error
+          ? err.message
+          : 'Impossible d\'envoyer l\'e-mail de vérification.'
+      );
+    } finally {
+      setIsResendingVerif(false);
+    }
+  };
+
+  const handleCheckVerification = async () => {
+    if (!auth?.currentUser) return;
+    setIsCheckingVerif(true);
+    try {
+      await auth.currentUser.reload();
+      const refreshed = auth.currentUser;
+      onUserReloaded(refreshed);
+      if (refreshed?.emailVerified) {
+        await refreshed.getIdToken(true);
+        onRestartSync();
+      } else {
+        setUnverifiedMsg(
+          'Adresse toujours non vérifiée. Cliquez d\'abord sur le lien reçu par e-mail.'
+        );
+      }
+    } catch (err) {
+      setUnverifiedMsg(
+        err instanceof Error ? err.message : 'Erreur lors de la vérification.'
+      );
+    } finally {
+      setIsCheckingVerif(false);
+    }
+  };
+
+  const getSyncStatusDisplay = () => {
+    if (cloudState.syncStatus === 'syncing') {
+      return {
+        text: 'Synchronisation en cours…',
+        colorClass: 'text-amber-700',
+      };
+    }
+    if (cloudState.syncStatus === 'error') {
+      return {
+        text: 'Erreur de synchronisation',
+        colorClass: 'text-red-700',
+      };
+    }
+    if (cloudState.initialSyncDone || cloudState.syncStatus === 'synced') {
+      return {
+        text: `Synchronisé (${totalItemsCount} élément${totalItemsCount > 1 ? 's' : ''})`,
+        colorClass: 'text-forest-700',
+      };
+    }
+    return {
+      text: 'Connexion au Cloud…',
+      colorClass: 'text-earth-600',
+    };
+  };
+
+  const statusDisplay = getSyncStatusDisplay();
+  const effectiveSyncError = syncActionError || cloudState.syncError;
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-forest-950 via-forest-900 to-earth-100 px-4 py-10">
-      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-earth-200/80 bg-white shadow-2xl">
+    <div
+      id="modal-auth"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-forest-950/60 p-3 backdrop-blur-sm sm:p-6"
+    >
+      <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-earth-200 bg-white shadow-2xl">
         {/* Header */}
-        <div className="bg-gradient-to-r from-forest-950 via-forest-900 to-forest-800 px-6 py-6 text-white">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-earth-400/30 bg-forest-800/80 text-earth-200 shadow-inner">
-              <Trees className="h-6 w-6" />
-            </div>
+        <div className="flex items-center justify-between border-b border-earth-200 bg-forest-900 px-5 py-4 text-white">
+          <div className="flex items-center gap-2.5">
+            <Cloud className="h-5 w-5 text-earth-300" />
             <div>
-              <h1 className="text-xl font-bold tracking-tight text-earth-50">
-                Carnet de Chasse
-              </h1>
+              <h2 className="text-lg font-semibold">Compte Cloud Carnet de Chasse</h2>
               <p className="text-xs text-forest-200">
-                Suivi des sorties &amp; Album trophées synchronisés
+                Synchronisation Firestore (quentin-apps-hub)
               </p>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-forest-200 transition hover:bg-white/10 hover:text-white"
+            aria-label="Fermer"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
-        {/* Body */}
-        <div className="p-6">
-          {/* Tabs */}
-          {mode !== 'reset' && (
-            <div className="mb-5 grid grid-cols-2 gap-1 rounded-xl bg-earth-100 p-1">
-              <button
-                type="button"
-                onClick={() => switchMode('login')}
-                className={`rounded-lg py-2 text-xs font-semibold transition sm:text-sm ${
-                  mode === 'login'
-                    ? 'bg-white text-forest-950 shadow-sm'
-                    : 'text-earth-700 hover:text-forest-950'
-                }`}
-              >
-                Connexion
-              </button>
-              <button
-                type="button"
-                onClick={() => switchMode('register')}
-                className={`rounded-lg py-2 text-xs font-semibold transition sm:text-sm ${
-                  mode === 'register'
-                    ? 'bg-white text-forest-950 shadow-sm'
-                    : 'text-earth-700 hover:text-forest-950'
-                }`}
-              >
-                Créer un compte
-              </button>
-            </div>
-          )}
-
-          {mode === 'reset' && (
-            <div className="mb-4">
-              <h2 className="text-base font-bold text-forest-950">
-                Réinitialiser le mot de passe
-              </h2>
-              <p className="mt-1 text-xs text-earth-600">
-                Saisissez votre adresse e-mail pour recevoir un lien de réinitialisation.
+        <div className="space-y-4 overflow-y-auto p-5">
+          {!user ? (
+            /* Formulaire de connexion (déconnecté) */
+            <div id="auth-logged-out-panel" className="space-y-4">
+              <p className="text-xs leading-relaxed text-earth-700">
+                Connectez-vous pour synchroniser vos sorties de chasse et votre album
+                trophées entre tous vos appareils. Vos données restent stockées en local
+                et accessibles hors-ligne.
               </p>
-            </div>
-          )}
 
-          {error && (
-            <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-red-800">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {info && (
-            <div className="mb-4 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs text-emerald-800">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-              <span>{info}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-3.5">
-            {mode === 'register' && (
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-forest-900">
-                  Nom / Pseudo (optionnel)
-                </label>
-                <div className="relative">
-                  <UserIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-earth-500" />
-                  <input
-                    type="text"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="Ex: Quentin"
-                    autoComplete="name"
-                    className="w-full rounded-xl border border-earth-200 bg-earth-50/50 py-2.5 pl-9 pr-3 text-sm text-forest-950 outline-none transition focus:border-forest-600 focus:bg-white focus:ring-2 focus:ring-forest-600/15"
-                  />
-                </div>
-              </div>
-            )}
-
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-forest-900">
-                Adresse e-mail
-              </label>
-              <div className="relative">
-                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-earth-500" />
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="vous@exemple.fr"
-                  autoComplete="email"
-                  className="w-full rounded-xl border border-earth-200 bg-earth-50/50 py-2.5 pl-9 pr-3 text-sm text-forest-950 outline-none transition focus:border-forest-600 focus:bg-white focus:ring-2 focus:ring-forest-600/15"
-                />
-              </div>
-            </div>
-
-            {mode !== 'reset' && (
-              <div>
-                <div className="mb-1 flex items-center justify-between">
-                  <label className="text-xs font-semibold text-forest-900">
-                    Mot de passe
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-forest-900">
+                    Email
                   </label>
-                  {mode === 'login' && (
-                    <button
-                      type="button"
-                      onClick={() => switchMode('reset')}
-                      className="text-xs font-medium text-forest-700 hover:text-forest-900 hover:underline"
-                    >
-                      Mot de passe oublié ?
-                    </button>
-                  )}
+                  <div className="relative">
+                    <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-earth-500" />
+                    <input
+                      id="auth-email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="prenom@exemple.fr"
+                      autoComplete="email"
+                      className="w-full rounded-xl border border-earth-200 bg-earth-50/50 py-2.5 pl-9 pr-3 text-sm text-forest-950 outline-none transition focus:border-forest-600 focus:bg-white focus:ring-2 focus:ring-forest-600/15"
+                    />
+                  </div>
                 </div>
-                <div className="relative">
-                  <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-earth-500" />
-                  <input
-                    type="password"
-                    required
-                    minLength={6}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                    className="w-full rounded-xl border border-earth-200 bg-earth-50/50 py-2.5 pl-9 pr-3 text-sm text-forest-950 outline-none transition focus:border-forest-600 focus:bg-white focus:ring-2 focus:ring-forest-600/15"
-                  />
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-forest-900">
+                    Mot de passe (6 car. min)
+                  </label>
+                  <div className="relative">
+                    <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-earth-500" />
+                    <input
+                      id="auth-password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      autoComplete="current-password"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          void handleEmailAuth(false);
+                        }
+                      }}
+                      className="w-full rounded-xl border border-earth-200 bg-earth-50/50 py-2.5 pl-9 pr-3 text-sm text-forest-950 outline-none transition focus:border-forest-600 focus:bg-white focus:ring-2 focus:ring-forest-600/15"
+                    />
+                  </div>
                 </div>
               </div>
-            )}
 
-            <button
-              type="submit"
-              disabled={busy}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-forest-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-forest-900 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isSubmitting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : mode === 'login' ? (
-                <LogIn className="h-4 w-4" />
-              ) : mode === 'register' ? (
-                <UserPlus className="h-4 w-4" />
-              ) : (
-                <KeyRound className="h-4 w-4" />
+              {authError && (
+                <div
+                  id="auth-error-msg"
+                  className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-red-800"
+                >
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                  <span>{authError}</span>
+                </div>
               )}
-              <span>
-                {mode === 'login'
-                  ? 'Se connecter'
-                  : mode === 'register'
-                    ? 'Créer mon carnet'
-                    : 'Envoyer le lien'}
-              </span>
-            </button>
-          </form>
 
-          {mode === 'reset' ? (
-            <button
-              type="button"
-              onClick={() => switchMode('login')}
-              className="mt-4 w-full text-center text-xs font-medium text-forest-700 hover:underline"
-            >
-              Retour à la connexion
-            </button>
-          ) : (
-            <>
-              <div className="my-5 flex items-center gap-3">
-                <div className="h-px flex-1 bg-earth-200" />
-                <span className="text-xs font-medium text-earth-500">ou</span>
-                <div className="h-px flex-1 bg-earth-200" />
-              </div>
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => void handleEmailAuth(false)}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-forest-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-forest-900 disabled:opacity-60"
+                >
+                  {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Se connecter
+                </button>
 
-              <button
-                type="button"
-                disabled={busy}
-                onClick={handleGoogleSignIn}
-                className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-earth-200 bg-white px-4 py-2.5 text-sm font-semibold text-forest-950 shadow-sm transition hover:bg-earth-50 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isGoogleLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-forest-700" />
-                ) : (
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => void handleEmailAuth(true)}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-earth-300 bg-earth-100 px-4 py-2.5 text-sm font-semibold text-forest-950 transition hover:bg-earth-200 disabled:opacity-60"
+                >
+                  Créer un compte
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => void handleGoogleAuth()}
+                  className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-earth-200 bg-white px-4 py-2.5 text-sm font-semibold text-forest-950 shadow-sm transition hover:bg-earth-50 disabled:opacity-60"
+                >
                   <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
                     <path
                       fill="#4285F4"
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                      d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17Z"
                     />
                     <path
                       fill="#34A853"
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.31 24 12 24Z"
                     />
                     <path
                       fill="#FBBC05"
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                      d="M5.28 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.99-3.14Z"
                     />
                     <path
                       fill="#EA4335"
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                      d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96Z"
                     />
                   </svg>
-                )}
-                <span>Continuer avec Google</span>
-              </button>
-            </>
+                  <span>Continuer avec Google</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Panneau compte connecté */
+            <div id="auth-logged-in-panel" className="space-y-3.5">
+              <div className="rounded-xl border border-earth-200 bg-earth-50/70 p-3.5">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-earth-600">
+                  Connecté en tant que
+                </div>
+                <div
+                  id="auth-connected-email"
+                  className="mt-0.5 break-all text-sm font-bold text-forest-950"
+                >
+                  {user.email || user.displayName || user.uid}
+                </div>
+                <div
+                  id="auth-sync-status"
+                  className={`mt-1.5 text-xs font-semibold ${statusDisplay.colorClass}`}
+                >
+                  {statusDisplay.text}
+                </div>
+              </div>
+
+              {effectiveSyncError && (
+                <div
+                  id="auth-sync-error-msg"
+                  className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-red-800"
+                >
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                  <span>{effectiveSyncError}</span>
+                </div>
+              )}
+
+              {!user.emailVerified && (
+                <div
+                  id="auth-unverified-box"
+                  className="rounded-xl border border-amber-400/50 bg-amber-50/90 p-3.5 text-xs"
+                >
+                  <div className="mb-1 font-bold text-amber-900">
+                    Adresse e-mail non vérifiée
+                  </div>
+                  <div id="auth-unverified-msg" className="mb-2.5 text-amber-800">
+                    {unverifiedMsg}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      id="btn-resend-verif"
+                      type="button"
+                      disabled={isResendingVerif}
+                      onClick={() => void handleResendVerification()}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 transition hover:bg-amber-100 disabled:opacity-60"
+                    >
+                      {isResendingVerif && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                      Renvoyer l'e-mail de vérification
+                    </button>
+                    <button
+                      id="btn-check-verif"
+                      type="button"
+                      disabled={isCheckingVerif}
+                      onClick={() => void handleCheckVerification()}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-forest-800 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-forest-900 disabled:opacity-60"
+                    >
+                      {isCheckingVerif && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                      J'ai vérifié
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-2">
+                <button
+                  id="btn-force-sync"
+                  type="button"
+                  disabled={isForceSyncing}
+                  onClick={() => void handleForceSync()}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-forest-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-forest-900 disabled:opacity-60"
+                >
+                  <RefreshCw
+                    className={`h-4 w-4 ${isForceSyncing ? 'animate-spin' : ''}`}
+                  />
+                  Synchroniser maintenant
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void handleSignOut()}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Se déconnecter
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>

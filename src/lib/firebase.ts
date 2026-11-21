@@ -8,7 +8,7 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 
-const firebaseConfig = {
+export const FIREBASE_CONFIG = {
   apiKey:
     import.meta.env.VITE_FIREBASE_API_KEY ||
     'AIzaSyCuYM0tMpd1f1jDYz27OhCaPpcAWhI3i48',
@@ -28,10 +28,12 @@ const firebaseConfig = {
 };
 
 export const isFirebaseConfigured = Boolean(
-  firebaseConfig.apiKey &&
-    firebaseConfig.authDomain &&
-    firebaseConfig.projectId &&
-    firebaseConfig.appId
+  FIREBASE_CONFIG.apiKey &&
+    FIREBASE_CONFIG.authDomain &&
+    FIREBASE_CONFIG.projectId &&
+    FIREBASE_CONFIG.appId &&
+    typeof window !== 'undefined' &&
+    window.location.protocol !== 'file:'
 );
 
 let app: FirebaseApp | null = null;
@@ -40,24 +42,33 @@ let db: Firestore | null = null;
 let googleProvider: GoogleAuthProvider | null = null;
 
 if (isFirebaseConfigured) {
-  const alreadyInitialized = getApps().length > 0;
-  app = alreadyInitialized ? getApp() : initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  googleProvider = new GoogleAuthProvider();
-  googleProvider.setCustomParameters({ prompt: 'select_account' });
+  try {
+    const alreadyInitialized = getApps().length > 0;
+    app = alreadyInitialized ? getApp() : initializeApp(FIREBASE_CONFIG);
+    auth = getAuth(app);
+    googleProvider = new GoogleAuthProvider();
+    googleProvider.setCustomParameters({ prompt: 'select_account' });
 
-  if (alreadyInitialized) {
-    db = getFirestore(app);
-  } else {
-    try {
-      db = initializeFirestore(app, {
-        localCache: persistentLocalCache({
-          tabManager: persistentMultipleTabManager(),
-        }),
-      });
-    } catch {
+    if (alreadyInitialized) {
       db = getFirestore(app);
+    } else {
+      try {
+        db = initializeFirestore(app, {
+          localCache: persistentLocalCache({
+            tabManager: persistentMultipleTabManager(),
+          }),
+          ignoreUndefinedProperties: true,
+        });
+      } catch {
+        db = getFirestore(app);
+      }
     }
+  } catch (err) {
+    console.warn('Firebase SDK indisponible (mode hors-ligne local):', err);
+    app = null;
+    auth = null;
+    db = null;
+    googleProvider = null;
   }
 }
 
