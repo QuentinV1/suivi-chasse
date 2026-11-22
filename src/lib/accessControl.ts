@@ -3,6 +3,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   setDoc,
   writeBatch,
@@ -38,6 +39,7 @@ export const INITIAL_GLOBAL_WHITELIST: Array<{ email: string; displayName: strin
   { email: 'clementvaslin@gmail.com', displayName: 'Clément', role: 'user' },
   { email: 'delisle-margaux@hotmail.com', displayName: 'Margaux', role: 'user' },
   { email: 'mar9aux-delisle@hotmail.fr', displayName: 'Margaux (alt)', role: 'user' },
+  { email: 'vaslin.muriel45@gmail.com', displayName: 'Muriel', role: 'user' },
 ];
 
 export function normalizeEmail(email: string): string {
@@ -46,6 +48,171 @@ export function normalizeEmail(email: string): string {
 
 export function isValidEmailFormat(email: string): boolean {
   return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email.trim());
+}
+
+export interface HubAuthCache {
+  uid: string;
+  email: string;
+  appId: string;
+  hasAppAccess: true;
+  isAdmin: boolean;
+  isGlobalAdmin: boolean;
+  isAppAdmin: boolean;
+  role: HubRole | null;
+  appConfigured: boolean;
+  verifiedAt: number;
+}
+
+export const HUB_AUTH_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours
+
+export function getHubAuthCacheKey(appId: string): string {
+  return `hub_auth_cache_${appId}`;
+}
+
+export function isFirestoreOfflineError(err: unknown): boolean {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return true;
+  }
+  if (typeof err === 'object' && err !== null && 'code' in err) {
+    const code = String((err as { code?: unknown }).code);
+    if (
+      code === 'unavailable' ||
+      code === 'firestore/unavailable' ||
+      code === 'deadline-exceeded'
+    ) {
+      return true;
+    }
+  }
+  if (err instanceof Error) {
+    const msg = err.message.toLowerCase();
+    if (
+      msg.includes('offline') ||
+      msg.includes('unavailable') ||
+      msg.includes('network')
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function readHubAuthCache(
+  appId: string,
+  uid: string,
+  email: string | null | undefined,
+): HubAuthCache | null {
+  if (typeof localStorage === 'undefined' || !uid || !email) return null;
+  try {
+    const raw = localStorage.getItem(getHubAuthCacheKey(appId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<HubAuthCache>;
+    if (
+      !parsed ||
+      parsed.uid !== uid ||
+      !parsed.email ||
+      normalizeEmail(parsed.email) !== normalizeEmail(email) ||
+      parsed.appId !== appId ||
+      parsed.hasAppAccess !== true ||
+      typeof parsed.verifiedAt !== 'number'
+    ) {
+      return null;
+    }
+    const age = Date.now() - parsed.verifiedAt;
+    if (age > HUB_AUTH_CACHE_MAX_AGE_MS || age < -60_000) {
+      return null;
+    }
+    return parsed as HubAuthCache;
+  } catch {
+    return null;
+  }
+}
+
+export function writeHubAuthCache(
+  appId: string,
+  uid: string,
+  email: string,
+  status: AccessStatus,
+): void {
+  if (typeof localStorage === 'undefined' || !status.hasAppAccess) return;
+  try {
+    const payload: HubAuthCache = {
+      uid,
+      email: normalizeEmail(email),
+      appId,
+      hasAppAccess: true,
+      isAdmin: status.isAdmin,
+      isGlobalAdmin: status.isGlobalAdmin,
+      isAppAdmin: status.isAppAdmin,
+      role: status.role,
+      appConfigured: status.appConfigured,
+      verifiedAt: Date.now(),
+    };
+    localStorage.setItem(getHubAuthCacheKey(appId), JSON.stringify(payload));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+export function clearHubAuthCache(appId: string): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.removeItem(getHubAuthCacheKey(appId));
+  } catch {
+    // Ignore
+  }
+}
+
+export type AccessVerificationResult =
+  | { outcome: 'authorized'; status: AccessStatus; offline: boolean }
+  | { outcome: 'unauthorized'; email: string }
+  | { outcome: 'offline_unverified'; email: string };
+
+export async function verifyUserAccess(
+  db: Firestore | null | undefined,
+  appId: string,
+  user: { uid: string; email: string | null | undefined },
+): Promise<AccessVerificationResult> {
+  const email = user.email ? normalizeEmail(user.email) : '';
+  if (!email) {
+    return { outcome: 'unauthorized', email: user.uid };
+  }
+
+  const cacheToStatus = (cached: HubAuthCache): AccessStatus => ({
+    isGlobalAdmin: Boolean(cached.isGlobalAdmin),
+    isAppAdmin: Boolean(cached.isAppAdmin),
+    isAdmin: Boolean(cached.isAdmin),
+    hasAppAccess: true,
+    appConfigured: Boolean(cached.appConfigured),
+    role: cached.role ?? (cached.isAdmin ? 'admin' : 'user'),
+  });
+
+  if ((typeof navigator !== 'undefined' && !navigator.onLine) || !db) {
+    const cached = readHubAuthCache(appId, user.uid, email);
+    if (cached) {
+      return { outcome: 'authorized', status: cacheToStatus(cached), offline: true };
+    }
+    return { outcome: 'offline_unverified', email };
+  }
+
+  try {
+    const status = await resolveUserAccess(db, appId, email);
+    if (status.hasAppAccess) {
+      writeHubAuthCache(appId, user.uid, email, status);
+      return { outcome: 'authorized', status, offline: false };
+    }
+    clearHubAuthCache(appId);
+    return { outcome: 'unauthorized', email };
+  } catch (err) {
+    if (isFirestoreOfflineError(err)) {
+      const cached = readHubAuthCache(appId, user.uid, email);
+      if (cached) {
+        return { outcome: 'authorized', status: cacheToStatus(cached), offline: true };
+      }
+      return { outcome: 'offline_unverified', email };
+    }
+    clearHubAuthCache(appId);
+    return { outcome: 'unauthorized', email };
+  }
 }
 
 export async function resolveUserAccess(
@@ -65,13 +232,19 @@ export async function resolveUserAccess(
     };
   }
 
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    const offlineErr = new Error('Client is offline');
+    (offlineErr as Error & { code: string }).code = 'unavailable';
+    throw offlineErr;
+  }
+
   const isRoot = email === ROOT_ADMIN_EMAIL;
 
   let isGlobalAdmin = isRoot;
   let inGlobal = isRoot;
 
   try {
-    const globalSnap = await getDoc(doc(db, 'hub_global_whitelist', email));
+    const globalSnap = await getDocFromServer(doc(db, 'hub_global_whitelist', email));
     if (globalSnap.exists()) {
       inGlobal = true;
       const data = globalSnap.data() as Partial<WhitelistEntry>;
@@ -79,15 +252,16 @@ export async function resolveUserAccess(
         isGlobalAdmin = true;
       }
     }
-  } catch {
-    // Ignore if rules/offline prevent read
+  } catch (err) {
+    if (isFirestoreOfflineError(err)) throw err;
   }
 
   let appConfigured = false;
   try {
-    const appSnap = await getDoc(doc(db, 'hub_apps', appId));
+    const appSnap = await getDocFromServer(doc(db, 'hub_apps', appId));
     appConfigured = appSnap.exists();
-  } catch {
+  } catch (err) {
+    if (isFirestoreOfflineError(err)) throw err;
     appConfigured = false;
   }
 
@@ -95,7 +269,7 @@ export async function resolveUserAccess(
   let inApp = isGlobalAdmin;
 
   try {
-    const memberSnap = await getDoc(doc(db, 'hub_apps', appId, 'members', email));
+    const memberSnap = await getDocFromServer(doc(db, 'hub_apps', appId, 'members', email));
     if (memberSnap.exists()) {
       inApp = true;
       const data = memberSnap.data() as Partial<WhitelistEntry>;
@@ -103,12 +277,23 @@ export async function resolveUserAccess(
         isAppAdmin = true;
       }
     }
-  } catch {
-    // Not a member or offline
+  } catch (err) {
+    if (isFirestoreOfflineError(err)) throw err;
   }
 
   const isAdmin = isGlobalAdmin || isAppAdmin;
-  const hasAppAccess = isAdmin || (appConfigured ? inApp : inGlobal || INITIAL_GLOBAL_WHITELIST.some((u) => u.email === email));
+  let hasAppAccess = isAdmin || (appConfigured ? inApp : inGlobal);
+
+  if (!hasAppAccess && !appConfigured && !inGlobal) {
+    try {
+      const rootSnap = await getDocFromServer(doc(db, 'hub_global_whitelist', ROOT_ADMIN_EMAIL));
+      if (!rootSnap.exists()) {
+        hasAppAccess = INITIAL_GLOBAL_WHITELIST.some((u) => u.email === email);
+      }
+    } catch (err) {
+      if (isFirestoreOfflineError(err)) throw err;
+    }
+  }
 
   return {
     isGlobalAdmin,

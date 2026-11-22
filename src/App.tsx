@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { onAuthStateChanged, type User } from 'firebase/auth';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
 import {
   Compass,
   Award,
@@ -13,7 +13,8 @@ import {
   User as UserIcon,
 } from 'lucide-react';
 import { ActiveTab, GeoPoint, Hunt, Trophy } from './types';
-import { auth, isFirebaseConfigured } from './lib/firebase';
+import { auth, db, isFirebaseConfigured } from './lib/firebase';
+import { clearHubAuthCache, verifyUserAccess } from './lib/accessControl';
 import {
   activerSyncCloud,
   arreterListenersFirestore,
@@ -31,6 +32,7 @@ import {
   type CloudState,
 } from './utils/db';
 import { AuthScreen } from './components/AuthScreen';
+import { AccessGate, type AccessGateState } from './components/AccessGate';
 import { HuntsView } from './components/HuntsView';
 import { HuntFormModal } from './components/HuntFormModal';
 import { HuntDetailModal } from './components/HuntDetailModal';
@@ -45,6 +47,8 @@ export const APP_VERSION = '1.1.0';
 
 export const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
+  const [gate, setGate] = useState<AccessGateState>({ phase: 'loading' });
+  const userRef = useRef<User | null>(null);
   const [cloudState, setCloudState] = useState<CloudState>(initialCloudState);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
@@ -111,27 +115,73 @@ export const App: React.FC = () => {
     });
   }, []);
 
-  // 3. Observation de l'authentification Firebase (non bloquante)
-  useEffect(() => {
-    if (!isFirebaseConfigured || !auth) {
-      return;
-    }
-
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser || null);
-      if (currentUser) {
+  const runAccessCheck = useCallback(
+    async (targetUser: User, background = false) => {
+      if (!background) {
+        setGate({ phase: 'loading' });
+      }
+      const res = await verifyUserAccess(db, 'suivi-chasse', targetUser);
+      if (userRef.current?.uid !== targetUser.uid) return;
+      if (res.outcome === 'authorized') {
+        setGate({ phase: 'authorized', status: res.status, offline: res.offline });
         startCloudSync();
+      } else if (res.outcome === 'unauthorized') {
+        arreterListenersFirestore();
+        reinitialiserEtatCloud();
+        setGate({ phase: 'unauthorized', email: res.email });
       } else {
         arreterListenersFirestore();
         reinitialiserEtatCloud();
+        setGate({ phase: 'offline_unverified', email: res.email });
+      }
+    },
+    [startCloudSync],
+  );
+
+  const handleGateSignOut = useCallback(async () => {
+    clearHubAuthCache('suivi-chasse');
+    arreterListenersFirestore();
+    if (auth) {
+      await signOut(auth);
+    }
+    reinitialiserEtatCloud();
+    userRef.current = null;
+    setUser(null);
+    setGate({ phase: 'unauthenticated' });
+  }, []);
+
+  // 3. Observation de l'authentification Firebase + contrôle d'accès
+  useEffect(() => {
+    if (!isFirebaseConfigured || !auth) {
+      setGate({ phase: 'unauthenticated' });
+      return;
+    }
+
+    const onOnline = () => {
+      if (userRef.current) {
+        void runAccessCheck(userRef.current, true);
+      }
+    };
+    window.addEventListener('online', onOnline);
+
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      userRef.current = currentUser || null;
+      setUser(currentUser || null);
+      if (currentUser) {
+        void runAccessCheck(currentUser, false);
+      } else {
+        arreterListenersFirestore();
+        reinitialiserEtatCloud();
+        setGate({ phase: 'unauthenticated' });
       }
     });
 
     return () => {
+      window.removeEventListener('online', onOnline);
       unsubscribe();
       arreterListenersFirestore();
     };
-  }, [startCloudSync]);
+  }, [runAccessCheck]);
 
   const handleSaveHunt = async (hunt: Hunt) => {
     const nextHunts = await saveHunt(hunt);
@@ -200,6 +250,21 @@ export const App: React.FC = () => {
   const authButtonLabel = user
     ? (user.email || user.displayName || 'Cloud').split('@')[0]
     : 'Connexion';
+
+  if (gate.phase !== 'authorized') {
+    return (
+      <AccessGate
+        gate={gate}
+        user={user}
+        onRetryVerification={() => {
+          if (userRef.current) {
+            void runAccessCheck(userRef.current, false);
+          }
+        }}
+        onSignOut={handleGateSignOut}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-earth-50 text-forest-950">

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   createUserWithEmailAndPassword,
-  sendEmailVerification,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
@@ -19,7 +18,11 @@ import {
   Shield,
 } from 'lucide-react';
 import { auth, db, googleProvider, isFirebaseConfigured } from '../lib/firebase';
-import { resolveUserAccess, type AccessStatus } from '../lib/accessControl';
+import {
+  clearHubAuthCache,
+  resolveUserAccess,
+  type AccessStatus,
+} from '../lib/accessControl';
 import { AccessControlPanel } from './AccessControlPanel';
 import {
   arreterListenersFirestore,
@@ -72,8 +75,8 @@ export const AuthScreen: React.FC<CloudModalProps> = ({
   cloudState,
   totalItemsCount,
   onClose,
-  onRestartSync,
-  onUserReloaded,
+  onRestartSync: _onRestartSync,
+  onUserReloaded: _onUserReloaded,
 }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -81,16 +84,11 @@ export const AuthScreen: React.FC<CloudModalProps> = ({
   const [syncActionError, setSyncActionError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isForceSyncing, setIsForceSyncing] = useState(false);
-  const [isResendingVerif, setIsResendingVerif] = useState(false);
-  const [isCheckingVerif, setIsCheckingVerif] = useState(false);
-  const [unverifiedMsg, setUnverifiedMsg] = useState<string>(
-    'Vérifiez votre boîte mail (ou utilisez « Continuer avec Google »).'
-  );
   const [accessStatus, setAccessStatus] = useState<AccessStatus | null>(null);
   const [activeTab, setActiveTab] = useState<'account' | 'access'>('account');
 
   useEffect(() => {
-    if (!user || !user.emailVerified) {
+    if (!user || !user.email) {
       setAccessStatus(null);
       setActiveTab('account');
       return;
@@ -114,7 +112,7 @@ export const AuthScreen: React.FC<CloudModalProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [user, user?.email, user?.emailVerified]);
+  }, [user, user?.email]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -139,10 +137,7 @@ export const AuthScreen: React.FC<CloudModalProps> = ({
     setIsSubmitting(true);
     try {
       if (isRegister) {
-        const cred = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
-        if (cred.user) {
-          sendEmailVerification(cred.user).catch(() => {});
-        }
+        await createUserWithEmailAndPassword(auth, trimmedEmail, password);
       } else {
         await signInWithEmailAndPassword(auth, trimmedEmail, password);
       }
@@ -188,59 +183,13 @@ export const AuthScreen: React.FC<CloudModalProps> = ({
 
   const handleSignOut = async () => {
     if (!window.confirm('Se déconnecter du compte Cloud ?')) return;
+    clearHubAuthCache('suivi-chasse');
     arreterListenersFirestore();
     if (auth) {
       await signOut(auth);
     }
     reinitialiserEtatCloud();
     onClose();
-  };
-
-  const handleResendVerification = async () => {
-    if (!auth?.currentUser) return;
-    setIsResendingVerif(true);
-    try {
-      if (auth.currentUser.emailVerified) {
-        setUnverifiedMsg('Votre adresse est déjà vérifiée.');
-      } else {
-        await sendEmailVerification(auth.currentUser);
-        setUnverifiedMsg(
-          'E-mail de vérification envoyé ! Vérifiez votre boîte de réception (et les spams), puis cliquez sur « J\'ai vérifié ».'
-        );
-      }
-    } catch (err) {
-      setUnverifiedMsg(
-        err instanceof Error
-          ? err.message
-          : 'Impossible d\'envoyer l\'e-mail de vérification.'
-      );
-    } finally {
-      setIsResendingVerif(false);
-    }
-  };
-
-  const handleCheckVerification = async () => {
-    if (!auth?.currentUser) return;
-    setIsCheckingVerif(true);
-    try {
-      await auth.currentUser.reload();
-      const refreshed = auth.currentUser;
-      onUserReloaded(refreshed);
-      if (refreshed?.emailVerified) {
-        await refreshed.getIdToken(true);
-        onRestartSync();
-      } else {
-        setUnverifiedMsg(
-          'Adresse toujours non vérifiée. Cliquez d\'abord sur le lien reçu par e-mail.'
-        );
-      }
-    } catch (err) {
-      setUnverifiedMsg(
-        err instanceof Error ? err.message : 'Erreur lors de la vérification.'
-      );
-    } finally {
-      setIsCheckingVerif(false);
-    }
   };
 
   const getSyncStatusDisplay = () => {
@@ -496,42 +445,6 @@ export const AuthScreen: React.FC<CloudModalProps> = ({
                 >
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
                   <span>{effectiveSyncError}</span>
-                </div>
-              )}
-
-              {!user.emailVerified && (
-                <div
-                  id="auth-unverified-box"
-                  className="rounded-xl border border-amber-400/50 bg-amber-50/90 p-3.5 text-xs"
-                >
-                  <div className="mb-1 font-bold text-amber-900">
-                    Adresse e-mail non vérifiée
-                  </div>
-                  <div id="auth-unverified-msg" className="mb-2.5 text-amber-800">
-                    {unverifiedMsg}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      id="btn-resend-verif"
-                      type="button"
-                      disabled={isResendingVerif}
-                      onClick={() => void handleResendVerification()}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 transition hover:bg-amber-100 disabled:opacity-60"
-                    >
-                      {isResendingVerif && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                      Renvoyer l'e-mail de vérification
-                    </button>
-                    <button
-                      id="btn-check-verif"
-                      type="button"
-                      disabled={isCheckingVerif}
-                      onClick={() => void handleCheckVerification()}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-forest-800 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-forest-900 disabled:opacity-60"
-                    >
-                      {isCheckingVerif && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                      J'ai vérifié
-                    </button>
-                  </div>
                 </div>
               )}
 
