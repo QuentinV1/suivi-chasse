@@ -7,13 +7,17 @@ import {
 } from 'firebase/auth';
 import {
   AlertCircle,
+  BarChart3,
+  Camera,
   Loader2,
-  Lock,
+  LogIn,
   LogOut,
   Mail,
+  MapPin,
   RefreshCw,
   ShieldAlert,
   Trees,
+  UserPlus,
   WifiOff,
 } from 'lucide-react';
 import { auth, googleProvider, isFirebaseConfigured } from '../lib/firebase';
@@ -69,6 +73,7 @@ export const AccessGate: React.FC<AccessGateProps> = ({
   onRetryVerification,
   onSignOut,
 }) => {
+  const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
@@ -129,144 +134,190 @@ export const AccessGate: React.FC<AccessGateProps> = ({
     }
   };
 
+  const highlights = [
+    {
+      icon: BarChart3,
+      title: 'Carnet & Statistiques',
+      desc: 'Consigne tes sorties, gibier vu/tué et analyse tes saisons.',
+    },
+    {
+      icon: Camera,
+      title: 'Album trophées & Partage',
+      desc: 'Photos compressées, mensurations et partage WhatsApp / SMS.',
+    },
+    {
+      icon: MapPin,
+      title: 'Carte & Postes GPS',
+      desc: 'Repère tes postes et zones de chasse même sans réseau.',
+    },
+  ];
+
   return (
     <div
       id="access-gate-wall"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-earth-100 p-4 text-forest-950"
+      className="fixed inset-0 z-50 flex min-h-full items-center justify-center overflow-y-auto bg-gradient-to-br from-slate-100 via-emerald-50/40 to-slate-100 p-4 sm:p-6"
     >
-      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-earth-200 bg-white shadow-2xl">
-        <div className="flex items-center gap-3 border-b border-earth-200 bg-forest-900 px-5 py-4 text-white">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-earth-400/30 bg-forest-800/80 text-earth-200">
-            <Trees className="h-5 w-5" />
+      <div className="grid w-full max-w-4xl overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-xl lg:grid-cols-12">
+        {/* Panneau éditorial */}
+        <div className="relative flex flex-col justify-between bg-gradient-to-br from-stone-950 via-emerald-950 to-green-900 p-7 text-white lg:col-span-6 lg:p-10">
+          <div className="space-y-6">
+            <div className="inline-flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm">
+                <Trees className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <p className="text-xl font-extrabold tracking-tight">Carnet de Chasse</p>
+                <p className="text-xs text-emerald-100/80">Sorties &amp; Album trophées</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h1 className="text-2xl font-bold leading-tight sm:text-3xl">
+                Consigne tes sorties, territoires et trophées sur le terrain.
+              </h1>
+              <p className="text-sm text-emerald-100/80">
+                Synchronisé en temps réel sur tous tes appareils et accessible hors-ligne en forêt.
+              </p>
+            </div>
+
+            <div className="hidden space-y-3 pt-2 lg:block">
+              {highlights.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div
+                    key={item.title}
+                    className="flex items-start gap-3 rounded-2xl bg-white/10 p-3.5 ring-1 ring-white/10 backdrop-blur-sm"
+                  >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15">
+                      <Icon className="h-4 w-4 text-emerald-100" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-white">{item.title}</p>
+                      <p className="text-xs text-emerald-100/80">{item.desc}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div>
-            <h1 className="text-lg font-semibold">Carnet de Chasse</h1>
-            <p className="text-xs text-forest-200">Accès sécurisé &amp; Synchronisation</p>
+
+          <div className="mt-6 hidden items-center gap-2 text-xs text-emerald-100/70 lg:flex">
+            <WifiOff className="h-3.5 w-3.5" />
+            <span>Mode terrain hors-ligne inclus</span>
           </div>
         </div>
 
-        <div className="p-5">
+        {/* Formulaire */}
+        <div className="flex flex-col justify-center p-6 sm:p-8 lg:col-span-6 lg:p-10">
           {gate.phase === 'loading' && (
-            <div className="flex flex-col items-center gap-3 py-8 text-center">
-              <Loader2 className="h-8 w-8 animate-spin text-forest-700" />
-              <p className="text-sm text-earth-700">
+            <div className="flex flex-col items-center gap-3 py-10 text-center">
+              <Loader2 className="h-8 w-8 animate-spin text-emerald-800" />
+              <p className="text-sm text-slate-600">
                 Vérification de votre session et de vos autorisations…
               </p>
             </div>
           )}
 
           {gate.phase === 'unauthenticated' && (
-            <div id="access-gate-login" className="space-y-4">
-              <p className="text-xs leading-relaxed text-earth-700">
-                Connexion requise pour accéder à votre carnet de chasse. Connectez-vous
-                une première fois en ligne pour activer l&apos;utilisation hors-ligne en
-                forêt.
-              </p>
-
-              <div className="space-y-3">
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-forest-900">
-                    Email
-                  </label>
-                  <div className="relative">
-                    <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-earth-500" />
-                    <input
-                      id="gate-auth-email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="prenom@exemple.fr"
-                      autoComplete="email"
-                      className="w-full rounded-xl border border-earth-200 bg-earth-50/50 py-2.5 pl-9 pr-3 text-sm text-forest-950 outline-none transition focus:border-forest-600 focus:bg-white focus:ring-2 focus:ring-forest-600/15"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-forest-900">
-                    Mot de passe (6 car. min)
-                  </label>
-                  <div className="relative">
-                    <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-earth-500" />
-                    <input
-                      id="gate-auth-password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      autoComplete="current-password"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          void handleEmailAuth(false);
-                        }
-                      }}
-                      className="w-full rounded-xl border border-earth-200 bg-earth-50/50 py-2.5 pl-9 pr-3 text-sm text-forest-950 outline-none transition focus:border-forest-600 focus:bg-white focus:ring-2 focus:ring-forest-600/15"
-                    />
-                  </div>
-                </div>
+            <div id="access-gate-login">
+              <div className="mb-6 space-y-1">
+                <h2 className="text-xl font-bold text-slate-900">
+                  {mode === 'login' ? 'Connexion à ton espace' : 'Créer ton compte'}
+                </h2>
+                <p className="text-sm text-slate-500">
+                  Utilise ton compte autorisé pour retrouver ton carnet de chasse synchronisé.
+                </p>
               </div>
 
-              {authError && (
-                <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-red-800">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
-                  <span>{authError}</span>
-                </div>
-              )}
-
-              <div className="flex flex-col gap-2">
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() => void handleEmailAuth(false)}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-forest-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-forest-900 disabled:opacity-60"
-                >
-                  {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Se connecter
-                </button>
-
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() => void handleEmailAuth(true)}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-earth-300 bg-earth-100 px-4 py-2.5 text-sm font-semibold text-forest-950 transition hover:bg-earth-200 disabled:opacity-60"
-                >
-                  Créer un compte
-                </button>
-
+              <div className="space-y-4">
                 <button
                   type="button"
                   disabled={isSubmitting}
                   onClick={() => void handleGoogleAuth()}
-                  className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-earth-200 bg-white px-4 py-2.5 text-sm font-semibold text-forest-950 shadow-sm transition hover:bg-earth-50 disabled:opacity-60"
+                  className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-emerald-800 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 disabled:opacity-60"
                 >
-                  <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
-                    <path
-                      fill="#4285F4"
-                      d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17Z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.31 24 12 24Z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.28 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.99-3.14Z"
-                    />
-                    <path
-                      fill="#EA4335"
-                      d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96Z"
-                    />
-                  </svg>
-                  <span>Continuer avec Google</span>
+                  <LogIn className="h-4 w-4" />
+                  Continuer avec Google
                 </button>
+
+                <div className="flex items-center gap-3 text-xs text-slate-400">
+                  <div className="h-px flex-1 bg-slate-200" />
+                  <span>ou par e-mail</span>
+                  <div className="h-px flex-1 bg-slate-200" />
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void handleEmailAuth(mode === 'register');
+                  }}
+                  className="space-y-3"
+                >
+                  <input
+                    id="gate-auth-email"
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="adresse@email.com"
+                    autoComplete="email"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100"
+                  />
+
+                  <input
+                    id="gate-auth-password"
+                    type="password"
+                    required
+                    minLength={6}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Mot de passe (6+ caractères)"
+                    autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100"
+                  />
+
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    {isSubmitting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : mode === 'register' ? (
+                      <UserPlus className="h-4 w-4" />
+                    ) : (
+                      <Mail className="h-4 w-4" />
+                    )}
+                    {mode === 'register' ? 'Créer un compte' : 'Se connecter par e-mail'}
+                  </button>
+                </form>
+
+                <button
+                  type="button"
+                  className="w-full cursor-pointer pt-1 text-center text-xs font-medium text-slate-500 hover:text-emerald-800"
+                  onClick={() => {
+                    setMode(mode === 'login' ? 'register' : 'login');
+                    setAuthError(null);
+                  }}
+                >
+                  {mode === 'login'
+                    ? 'Pas encore de compte ? Créer un compte'
+                    : 'Déjà inscrit ? Se connecter'}
+                </button>
+
+                {authError && (
+                  <div className="flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-center text-xs font-medium text-red-700">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
+                    <span>{authError}</span>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
           {gate.phase === 'unauthorized' && (
             <div id="access-gate-unauthorized" className="space-y-4">
-              <div className="flex items-start gap-3 rounded-xl border border-red-300 bg-red-50 p-4 text-xs text-red-800">
+              <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-800">
                 <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
                 <div className="space-y-1">
                   <div className="text-sm font-bold text-red-900">Accès non autorisé</div>
@@ -292,7 +343,7 @@ export const AccessGate: React.FC<AccessGateProps> = ({
 
           {gate.phase === 'offline_unverified' && (
             <div id="access-gate-offline" className="space-y-4">
-              <div className="flex items-start gap-3 rounded-xl border border-amber-400/50 bg-amber-50 p-4 text-xs text-amber-900">
+              <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
                 <WifiOff className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
                 <div className="space-y-1">
                   <div className="text-sm font-bold">
@@ -311,7 +362,7 @@ export const AccessGate: React.FC<AccessGateProps> = ({
                   type="button"
                   disabled={isSubmitting}
                   onClick={onRetryVerification}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-forest-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-forest-900 disabled:opacity-60"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 disabled:opacity-60"
                 >
                   <RefreshCw className="h-4 w-4" />
                   Réessayer
@@ -320,7 +371,7 @@ export const AccessGate: React.FC<AccessGateProps> = ({
                   type="button"
                   disabled={isSubmitting}
                   onClick={() => void handleSignOutClick()}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:opacity-60"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
                 >
                   <LogOut className="h-4 w-4" />
                   Se déconnecter / Changer de compte

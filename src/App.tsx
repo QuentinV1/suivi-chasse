@@ -10,6 +10,7 @@ import {
   BarChart3,
   Map as MapIcon,
   Cloud,
+  MessageSquarePlus,
   User as UserIcon,
 } from 'lucide-react';
 import { ActiveTab, GeoPoint, Hunt, Trophy } from './types';
@@ -32,6 +33,7 @@ import {
   type CloudState,
 } from './utils/db';
 import { AuthScreen } from './components/AuthScreen';
+import { FeedbackModal } from './components/FeedbackModal';
 import { AccessGate, type AccessGateState } from './components/AccessGate';
 import { HuntsView } from './components/HuntsView';
 import { HuntFormModal } from './components/HuntFormModal';
@@ -51,6 +53,7 @@ export const App: React.FC = () => {
   const userRef = useRef<User | null>(null);
   const [cloudState, setCloudState] = useState<CloudState>(initialCloudState);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('hunts');
   const [hunts, setHunts] = useState<Hunt[]>([]);
@@ -295,6 +298,16 @@ export const App: React.FC = () => {
             {/* Actions */}
             <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
               <button
+                type="button"
+                onClick={() => setFeedbackOpen(true)}
+                title="Envoyer un feedback (évolution ou bug)"
+                aria-label="Envoyer un feedback"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-xs font-semibold text-earth-100 transition hover:bg-white/20 sm:text-sm"
+              >
+                <MessageSquarePlus className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Feedback</span>
+              </button>
+              <button
                 id="btn-auth-header"
                 type="button"
                 onClick={() => setIsAuthModalOpen(true)}
@@ -475,6 +488,14 @@ export const App: React.FC = () => {
       </main>
 
       {/* Modals */}
+      <FeedbackModal
+        open={feedbackOpen}
+        user={user}
+        db={db}
+        context={`tab=${activeTab}`}
+        onClose={() => setFeedbackOpen(false)}
+      />
+
       {isAuthModalOpen && (
         <AuthScreen
           user={user}
