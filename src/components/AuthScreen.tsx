@@ -16,8 +16,11 @@ import {
   Loader2,
   Mail,
   Lock,
+  Shield,
 } from 'lucide-react';
-import { auth, googleProvider, isFirebaseConfigured } from '../lib/firebase';
+import { auth, db, googleProvider, isFirebaseConfigured } from '../lib/firebase';
+import { resolveUserAccess, type AccessStatus } from '../lib/accessControl';
+import { AccessControlPanel } from './AccessControlPanel';
 import {
   arreterListenersFirestore,
   forcerSyncCloud,
@@ -83,6 +86,35 @@ export const AuthScreen: React.FC<CloudModalProps> = ({
   const [unverifiedMsg, setUnverifiedMsg] = useState<string>(
     'Vérifiez votre boîte mail (ou utilisez « Continuer avec Google »).'
   );
+  const [accessStatus, setAccessStatus] = useState<AccessStatus | null>(null);
+  const [activeTab, setActiveTab] = useState<'account' | 'access'>('account');
+
+  useEffect(() => {
+    if (!user || !user.emailVerified) {
+      setAccessStatus(null);
+      setActiveTab('account');
+      return;
+    }
+    let cancelled = false;
+    resolveUserAccess(db, 'suivi-chasse', user.email)
+      .then((status) => {
+        if (!cancelled) {
+          setAccessStatus(status);
+          if (!status.isAdmin) {
+            setActiveTab('account');
+          }
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAccessStatus(null);
+          setActiveTab('account');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, user?.email, user?.emailVerified]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -244,7 +276,11 @@ export const AuthScreen: React.FC<CloudModalProps> = ({
       id="modal-auth"
       className="fixed inset-0 z-50 flex items-center justify-center bg-forest-950/60 p-3 backdrop-blur-sm sm:p-6"
     >
-      <div className="flex max-h-[90vh] max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-earth-200 bg-white shadow-2xl">
+      <div
+        className={`flex max-h-[90vh] max-h-[90dvh] w-full flex-col overflow-hidden rounded-2xl border border-earth-200 bg-white shadow-2xl ${
+          activeTab === 'access' ? 'max-w-xl' : 'max-w-md'
+        }`}
+      >
         {/* Header */}
         <div className="flex items-center justify-between gap-3 border-b border-earth-200 bg-forest-900 px-4 py-3.5 text-white sm:px-5 sm:py-4">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -381,7 +417,61 @@ export const AuthScreen: React.FC<CloudModalProps> = ({
           ) : (
             /* Panneau compte connecté */
             <div id="auth-logged-in-panel" className="space-y-3.5">
-              <div className="rounded-xl border border-earth-200 bg-earth-50/70 p-3.5">
+              {accessStatus && !accessStatus.hasAppAccess && (
+                <div
+                  id="auth-unauthorized-banner"
+                  className="flex items-start gap-2 rounded-xl border border-red-300 bg-red-50 px-3.5 py-2.5 text-xs font-medium text-red-800"
+                >
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                  <span>
+                    Votre compte n&apos;est pas autorisé sur cette application. Contactez un
+                    administrateur.
+                  </span>
+                </div>
+              )}
+
+              {accessStatus?.isAdmin && (
+                <div className="grid grid-cols-2 gap-1 rounded-xl border border-earth-200 bg-earth-100/70 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('account')}
+                    className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                      activeTab === 'account'
+                        ? 'bg-white text-forest-950 shadow-sm'
+                        : 'text-earth-700 hover:text-forest-950'
+                    }`}
+                  >
+                    <Cloud className="h-3.5 w-3.5" />
+                    Compte Cloud
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('access')}
+                    className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                      activeTab === 'access'
+                        ? 'bg-white text-forest-950 shadow-sm'
+                        : 'text-earth-700 hover:text-forest-950'
+                    }`}
+                  >
+                    <Shield className="h-3.5 w-3.5" />
+                    Accès &amp; Rôles
+                  </button>
+                </div>
+              )}
+
+              {accessStatus?.isAdmin && activeTab === 'access' ? (
+                <div className="rounded-xl bg-slate-900 p-3">
+                  <AccessControlPanel
+                    db={db}
+                    user={user}
+                    appId="suivi-chasse"
+                    appName="Suivi Chasse"
+                    theme="dark"
+                  />
+                </div>
+              ) : (
+                <>
+                  <div className="rounded-xl border border-earth-200 bg-earth-50/70 p-3.5">
                 <div className="text-[11px] font-bold uppercase tracking-wider text-earth-600">
                   Connecté en tant que
                 </div>
@@ -468,6 +558,8 @@ export const AuthScreen: React.FC<CloudModalProps> = ({
                   Se déconnecter
                 </button>
               </div>
+                </>
+              )}
             </div>
           )}
         </div>
